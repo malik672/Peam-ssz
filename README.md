@@ -6,14 +6,12 @@ The goal here is simple:
 
 - keep dependencies minimal
 - keep the hot path cheap
-- validate against real spec vectors
-- compare directly against other Rust SSZ implementations
 
 Right now the crate depends on `sha2` and otherwise keeps the core implementation local.
 
 ## Origins
 
-This crate started as a direct extraction of Peam's internal SSZ code and then grew into a standalone testable library.
+This crate started as a direct extraction of Peam's internal SSZ code which was copied from SigmaPrime ethssz and then grew into a standalone testable library.
 
 Core implementation came from:
 
@@ -175,11 +173,3 @@ Peam-only header HTR measurement in the current harness:
 
 - The current benchmark harness is intentionally narrow: primitives, fixed bytes, `Vec<u64>`, and a `BeaconBlockHeader`-shaped container.
 
-## Status
-
-`peam-ssz` is already useful as a standalone high-performance SSZ crate, but it is still growing:
-
-- broader static vector coverage after `deneb`
-- stronger minimal-preset coverage once vectors are present locally
-- more realistic benchmark coverage for larger nested containers
-- continued differential fuzzing
