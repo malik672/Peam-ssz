@@ -172,13 +172,11 @@ where
     fn encode_ssz(&self) -> Vec<u8> {
         if let Some(elem_len) = T::fixed_len_opt() {
             let total = elem_len * LENGTH;
-            let mut out = Vec::with_capacity(total);
+            let mut out: Vec<u8> = Vec::with_capacity(total);
             unsafe { out.set_len(total) };
-            let mut cursor = 0usize;
-            for item in &self.data {
-                let bytes = item.encode_ssz();
-                unsafe { write_bytes_at(&mut out, cursor, &bytes) };
-                cursor += bytes.len();
+            for (idx, item) in self.data.iter().enumerate() {
+                let offset = idx * elem_len;
+                unsafe { item.write_fixed_ssz(out.as_mut_ptr().add(offset)) };
             }
             return out;
         }
@@ -186,12 +184,16 @@ where
         let count = self.data.len();
         let mut offsets = Vec::with_capacity(count);
         let mut elems = Vec::with_capacity(count);
+        unsafe {
+            offsets.set_len(count);
+            elems.set_len(count);
+        }
         let mut cursor = 4 * count;
-        for item in &self.data {
+        for (idx, item) in self.data.iter().enumerate() {
             let bytes = item.encode_ssz();
-            offsets.push(cursor as u32);
+            unsafe { write_at(&mut offsets, idx, cursor as u32) };
             cursor += bytes.len();
-            elems.push(bytes);
+            unsafe { write_at(&mut elems, idx, bytes) };
         }
         let mut out = Vec::with_capacity(cursor);
         unsafe { out.set_len(cursor) };
@@ -215,13 +217,11 @@ where
     fn encode_ssz(&self) -> Vec<u8> {
         if let Some(elem_len) = T::fixed_len_opt() {
             let total = elem_len * self.data.len();
-            let mut out = Vec::with_capacity(total);
+            let mut out: Vec<u8> = Vec::with_capacity(total);
             unsafe { out.set_len(total) };
-            let mut cursor = 0usize;
-            for item in &self.data {
-                let bytes = item.encode_ssz();
-                unsafe { write_bytes_at(&mut out, cursor, &bytes) };
-                cursor += bytes.len();
+            for (idx, item) in self.data.iter().enumerate() {
+                let offset = idx * elem_len;
+                unsafe { item.write_fixed_ssz(out.as_mut_ptr().add(offset)) };
             }
             return out;
         }
@@ -229,12 +229,16 @@ where
         let count = self.data.len();
         let mut offsets = Vec::with_capacity(count);
         let mut elems = Vec::with_capacity(count);
+        unsafe {
+            offsets.set_len(count);
+            elems.set_len(count);
+        }
         let mut cursor = 4 * count;
-        for item in &self.data {
+        for (idx, item) in self.data.iter().enumerate() {
             let bytes = item.encode_ssz();
-            offsets.push(cursor as u32);
+            unsafe { write_at(&mut offsets, idx, cursor as u32) };
             cursor += bytes.len();
-            elems.push(bytes);
+            unsafe { write_at(&mut elems, idx, bytes) };
         }
         let mut out = Vec::with_capacity(cursor);
         unsafe { out.set_len(cursor) };

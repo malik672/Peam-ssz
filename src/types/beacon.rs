@@ -39,6 +39,22 @@ impl SszEncode for BeaconBlockHeader {
             EncodedContainerField::Fixed(&body_root),
         ])
     }
+
+    /// Appends the encoded fixed-layout header to an existing buffer.
+    fn encode_ssz_into(&self, out: &mut Vec<u8>) {
+        out.extend_from_slice(&self.encode_ssz());
+    }
+
+    /// Writes the 112-byte fixed header layout directly to `dst`.
+    unsafe fn write_fixed_ssz(&self, dst: *mut u8) {
+        unsafe {
+            self.slot.write_fixed_ssz(dst);
+            self.proposer_index.write_fixed_ssz(dst.add(8));
+            self.parent_root.write_fixed_ssz(dst.add(16));
+            self.state_root.write_fixed_ssz(dst.add(48));
+            self.body_root.write_fixed_ssz(dst.add(80));
+        }
+    }
 }
 
 impl SszDecode for BeaconBlockHeader {
