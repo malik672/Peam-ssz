@@ -1,0 +1,29 @@
+[package]
+name = "peam-ssz"
+version = "0.1.0"
+edition = "2024"
+
+[workspace]
+resolver = "3"
+members = [".", "spec-tests"]
+default-members = ["."]
+
+[dependencies]
+sha2 = "0.10"
+
+[dev-dependencies]
+criterion = { version = "0.5", features = ["html_reports"] }
+libssz = { path = "../libssz/crates/ssz" }
+libssz-types = { path = "../libssz/crates/ssz-types" }
+libssz-merkle = { path = "../libssz/crates/ssz-merkle" }
+libssz-derive = { path = "../libssz/crates/ssz-derive" }
+lighthouse_ssz = { package = "ethereum_ssz", version = "0.10" }
+ssz_rs = "0.9"
+tree_hash = "0.12"
+
+[build-dependencies]
+sha2 = "0.10"
+
+[[bench]]
+name = "peam_differential"
+harness = false
