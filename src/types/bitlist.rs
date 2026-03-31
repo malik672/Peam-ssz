@@ -168,6 +168,16 @@ impl<const LENGTH: usize> SszEncode for BitVector<LENGTH> {
     fn encode_ssz(&self) -> Vec<u8> {
         self.pack_bits()
     }
+
+    fn encode_ssz_into(&self, out: &mut Vec<u8>) {
+        out.extend_from_slice(&self.data);
+    }
+
+    unsafe fn write_fixed_ssz(&self, dst: *mut u8) {
+        unsafe {
+            core::ptr::copy_nonoverlapping(self.data.as_ptr(), dst, self.data.len());
+        }
+    }
 }
 
 impl<const LENGTH: usize> SszDecode for BitVector<LENGTH> {
@@ -197,6 +207,20 @@ impl<const LENGTH: usize> SszElement for BitVector<LENGTH> {
 impl<const LIMIT: usize> SszEncode for BitList<LIMIT> {
     fn encode_ssz(&self) -> Vec<u8> {
         self.pack_bits_with_terminator()
+    }
+
+    fn encode_ssz_into(&self, out: &mut Vec<u8>) {
+        let start = out.len();
+        let bytes = (self.len + 1).div_ceil(8);
+        out.resize(start + bytes, 0);
+        let copy_len = self.data.len().min(bytes);
+        out[start..start + copy_len].copy_from_slice(&self.data[..copy_len]);
+        let term_index = self.len;
+        out[start + term_index / 8] |= 1u8 << (term_index % 8);
+    }
+
+    unsafe fn write_fixed_ssz(&self, _dst: *mut u8) {
+        panic!("BitList is variable-size and cannot be written via write_fixed_ssz");
     }
 }
 

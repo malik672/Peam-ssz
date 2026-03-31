@@ -140,8 +140,8 @@ The tables below use the median point estimate from the latest local Criterion r
 | `bool` | `15.375 ns` | `16.974 ns` | `19.645 ns` | `19.377 ns` | `1.10x faster` | `1.28x faster` | `1.26x faster` |
 | `u64` | `15.379 ns` | `15.406 ns` | `18.046 ns` | `18.285 ns` | `~1.00x` | `1.17x faster` | `1.19x faster` |
 | `[u8; 32]` | `17.942 ns` | `19.635 ns` | `20.415 ns` | `820.09 ns` | `1.09x faster` | `1.14x faster` | `45.71x faster` |
-| `Vec<u64> (1K)` | `103.79 ns` | `101.16 ns` | `423.76 ns` | `19.965 us` | `1.03x slower` | `4.08x faster` | `192.36x faster` |
-| `Vec<u64> (100K)` | `10.211 us` | `12.300 us` | `54.442 us` | `1.8252 ms` | `1.20x faster` | `5.33x faster` | `178.75x faster` |
+| `Vec<u64> (1K)` | `105.22 ns` | `116.18 ns` | `426.44 ns` | `22.484 us` | `1.10x faster` | `4.05x faster` | `213.69x faster` |
+| `Vec<u64> (100K)` | `11.045 us` | `12.394 us` | `55.006 us` | `2.2138 ms` | `1.12x faster` | `4.98x faster` | `200.43x faster` |
 | `BeaconBlockHeader` | `18.034 ns` | `19.660 ns` | `134.39 ns` | `2.3907 us` | `1.09x faster` | `7.45x faster` | `132.57x faster` |
 
 ### Decode
@@ -172,4 +172,3 @@ Peam-only header HTR measurement in the current harness:
 ## Notes
 
 - The current benchmark harness is intentionally narrow: primitives, fixed bytes, `Vec<u64>`, and a `BeaconBlockHeader`-shaped container.
-

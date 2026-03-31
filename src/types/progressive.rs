@@ -65,6 +65,35 @@ where
         }
         out
     }
+
+    fn encode_ssz_into(&self, out: &mut Vec<u8>) {
+        if let Some(elem_len) = T::fixed_len_opt() {
+            let total = elem_len * self.data.len();
+            let start = out.len();
+            out.reserve(total);
+            unsafe { out.set_len(start + total) };
+            for (idx, item) in self.data.iter().enumerate() {
+                let offset = start + idx * elem_len;
+                unsafe { item.write_fixed_ssz(out.as_mut_ptr().add(offset)) };
+            }
+            return;
+        }
+
+        let count = self.data.len();
+        let table_start = out.len();
+        let table_len = 4 * count;
+        out.reserve(table_len);
+        unsafe { out.set_len(table_start + table_len) };
+        for (idx, item) in self.data.iter().enumerate() {
+            let offset = (out.len() - table_start) as u32;
+            unsafe { write_bytes_at(out, table_start + idx * 4, &offset.to_le_bytes()) };
+            item.encode_ssz_into(out);
+        }
+    }
+
+    unsafe fn write_fixed_ssz(&self, _dst: *mut u8) {
+        panic!("ProgressiveList is variable-size and cannot be written via write_fixed_ssz");
+    }
 }
 
 impl<T> SszDecode for ProgressiveList<T>
@@ -162,7 +191,7 @@ where
 
 impl<T> HashTreeRoot for ProgressiveList<T>
 where
-    T: SszEncode + SszElement + HashTreeRoot,
+    T: SszEncode + SszElement + HashTreeRoot + 'static,
 {
     /// Computes the progressive list root and mixes in the current length.
     fn hash_tree_root(&self) -> [u8; 32] {
@@ -245,6 +274,20 @@ impl SszEncode for ProgressiveBitlist {
     /// Encodes the bitlist with the SSZ terminator bit.
     fn encode_ssz(&self) -> Vec<u8> {
         self.pack_bits_with_terminator()
+    }
+
+    fn encode_ssz_into(&self, out: &mut Vec<u8>) {
+        let start = out.len();
+        let bytes = (self.len + 1).div_ceil(8);
+        out.resize(start + bytes, 0);
+        let copy_len = self.data.len().min(bytes);
+        out[start..start + copy_len].copy_from_slice(&self.data[..copy_len]);
+        let term_index = self.len;
+        out[start + term_index / 8] |= 1u8 << (term_index % 8);
+    }
+
+    unsafe fn write_fixed_ssz(&self, _dst: *mut u8) {
+        panic!("ProgressiveBitlist is variable-size and cannot be written via write_fixed_ssz");
     }
 }
 

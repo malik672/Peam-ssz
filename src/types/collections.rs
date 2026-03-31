@@ -167,7 +167,7 @@ impl<T, const LIMIT: usize> SszList<T, LIMIT> {
 
 impl<T, const LENGTH: usize> SszEncode for SszVector<T, LENGTH>
 where
-    T: SszEncode + SszElement,
+    T: SszEncode + SszElement + 'static,
 {
     fn encode_ssz(&self) -> Vec<u8> {
         if let Some(elem_len) = T::fixed_len_opt() {
@@ -208,11 +208,46 @@ where
         }
         out
     }
+
+    fn encode_ssz_into(&self, out: &mut Vec<u8>) {
+        if let Some(elem_len) = T::fixed_len_opt() {
+            let total = elem_len * LENGTH;
+            let start = out.len();
+            out.reserve(total);
+            unsafe { out.set_len(start + total) };
+            for (idx, item) in self.data.iter().enumerate() {
+                let offset = start + idx * elem_len;
+                unsafe { item.write_fixed_ssz(out.as_mut_ptr().add(offset)) };
+            }
+            return;
+        }
+
+        let count = self.data.len();
+        let table_start = out.len();
+        let table_len = 4 * count;
+        out.reserve(table_len);
+        unsafe { out.set_len(table_start + table_len) };
+        for (idx, item) in self.data.iter().enumerate() {
+            let offset = (out.len() - table_start) as u32;
+            unsafe { write_bytes_at(out, table_start + idx * 4, &offset.to_le_bytes()) };
+            item.encode_ssz_into(out);
+        }
+    }
+
+    unsafe fn write_fixed_ssz(&self, dst: *mut u8) {
+        let Some(elem_len) = T::fixed_len_opt() else {
+            panic!("variable-size SszVector cannot be written via write_fixed_ssz");
+        };
+        for (idx, item) in self.data.iter().enumerate() {
+            let offset = idx * elem_len;
+            unsafe { item.write_fixed_ssz(dst.add(offset)) };
+        }
+    }
 }
 
 impl<T, const LIMIT: usize> SszEncode for SszList<T, LIMIT>
 where
-    T: SszEncode + SszElement,
+    T: SszEncode + SszElement + 'static,
 {
     fn encode_ssz(&self) -> Vec<u8> {
         if let Some(elem_len) = T::fixed_len_opt() {
@@ -241,17 +276,46 @@ where
             unsafe { write_at(&mut elems, idx, bytes) };
         }
         let mut out = Vec::with_capacity(cursor);
+        let table_len = 4 * count;
         unsafe { out.set_len(cursor) };
-        let mut cursor = 0usize;
-        for off in offsets {
-            unsafe { write_bytes_at(&mut out, cursor, &off.to_le_bytes()) };
-            cursor += 4;
+        for (idx, off) in offsets.iter().enumerate() {
+            unsafe { write_bytes_at(&mut out, idx * 4, &off.to_le_bytes()) };
         }
+        let mut payload_cursor = table_len;
         for bytes in elems {
-            unsafe { write_bytes_at(&mut out, cursor, &bytes) };
-            cursor += bytes.len();
+            unsafe { write_bytes_at(&mut out, payload_cursor, &bytes) };
+            payload_cursor += bytes.len();
         }
         out
+    }
+
+    fn encode_ssz_into(&self, out: &mut Vec<u8>) {
+        if let Some(elem_len) = T::fixed_len_opt() {
+            let total = elem_len * self.data.len();
+            let start = out.len();
+            out.reserve(total);
+            unsafe { out.set_len(start + total) };
+            for (idx, item) in self.data.iter().enumerate() {
+                let offset = start + idx * elem_len;
+                unsafe { item.write_fixed_ssz(out.as_mut_ptr().add(offset)) };
+            }
+            return;
+        }
+
+        let count = self.data.len();
+        let table_start = out.len();
+        let table_len = 4 * count;
+        out.reserve(table_len);
+        unsafe { out.set_len(table_start + table_len) };
+        for (idx, item) in self.data.iter().enumerate() {
+            let offset = (out.len() - table_start) as u32;
+            unsafe { write_bytes_at(out, table_start + idx * 4, &offset.to_le_bytes()) };
+            item.encode_ssz_into(out);
+        }
+    }
+
+    unsafe fn write_fixed_ssz(&self, _dst: *mut u8) {
+        panic!("SszList is variable-size and cannot be written via write_fixed_ssz");
     }
 }
 
@@ -386,7 +450,7 @@ where
 
 impl<T, const LENGTH: usize> HashTreeRoot for SszVector<T, LENGTH>
 where
-    T: SszEncode + SszElement + HashTreeRoot,
+    T: SszEncode + SszElement + HashTreeRoot + 'static,
 {
     fn hash_tree_root(&self) -> [u8; 32] {
         if let Some(elem_len) = T::fixed_len_opt().filter(|_| T::tree_pack_basic()) {
@@ -412,7 +476,7 @@ where
 
 impl<T, const LIMIT: usize> HashTreeRoot for SszList<T, LIMIT>
 where
-    T: SszEncode + SszElement + HashTreeRoot,
+    T: SszEncode + SszElement + HashTreeRoot + 'static,
 {
     fn hash_tree_root(&self) -> [u8; 32] {
         if let Some(elem_len) = T::fixed_len_opt().filter(|_| T::tree_pack_basic()) {
@@ -440,3 +504,31 @@ where
 
 impl<T, const LENGTH: usize> SszElement for SszVector<T, LENGTH> {}
 impl<T, const LIMIT: usize> SszElement for SszList<T, LIMIT> {}
+
+#[cfg(test)]
+mod tests {
+    use super::{SszList, SszVector};
+    use crate::ssz::SszEncode;
+
+    #[test]
+    fn list_encode_into_matches_encode_ssz_for_nested_lists() {
+        let inner = SszList::<u64, 8>::new(vec![1, 2, 3, 4]).unwrap();
+        let outer = SszList::<SszList<u64, 8>, 4>::new(vec![inner.clone(), inner]).unwrap();
+
+        let mut out = Vec::new();
+        outer.encode_ssz_into(&mut out);
+
+        assert_eq!(out, outer.encode_ssz());
+    }
+
+    #[test]
+    fn vector_encode_into_matches_encode_ssz_for_nested_lists() {
+        let inner = SszList::<u64, 8>::new(vec![1, 2, 3, 4]).unwrap();
+        let vector = SszVector::<SszList<u64, 8>, 2>::new(vec![inner.clone(), inner]).unwrap();
+
+        let mut out = Vec::new();
+        vector.encode_ssz_into(&mut out);
+
+        assert_eq!(out, vector.encode_ssz());
+    }
+}
