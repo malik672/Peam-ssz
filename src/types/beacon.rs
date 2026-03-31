@@ -1,8 +1,7 @@
 use crate::ssz::{HashTreeRoot, SszDecode, SszEncode, SszFixedLen};
 use crate::types::bytes::Bytes32;
 use crate::types::container::{
-    Container, ContainerFieldKind, EncodedContainerField, decode_field_slices, encode_fields,
-    hash_tree_root_from_field_roots,
+    Container, EncodedContainerField, encode_fields, hash_tree_root_from_field_roots,
 };
 
 /// Minimal fixed-layout beacon block header used for benchmark and fixture parity work.
@@ -73,23 +72,31 @@ impl SszEncode for BeaconBlockHeader {
 impl SszDecode for BeaconBlockHeader {
     /// Decodes the header from the fixed 112-byte container layout.
     fn decode_ssz(bytes: &[u8]) -> Result<Self, String> {
-        let fields = decode_field_slices(
-            bytes,
-            &[
-                ContainerFieldKind::Fixed(8),
-                ContainerFieldKind::Fixed(8),
-                ContainerFieldKind::Fixed(32),
-                ContainerFieldKind::Fixed(32),
-                ContainerFieldKind::Fixed(32),
-            ],
-        )?;
+        if bytes.len() != 112 {
+            return Err(format!(
+                "BeaconBlockHeader expects 112 bytes, got {}",
+                bytes.len()
+            ));
+        }
+        let slot = unsafe { core::ptr::read_unaligned(bytes.as_ptr() as *const u64) };
+        let proposer_index =
+            unsafe { core::ptr::read_unaligned(bytes.as_ptr().add(8) as *const u64) };
+        let parent_root = Bytes32::from(unsafe {
+            core::ptr::read_unaligned(bytes.as_ptr().add(16) as *const [u8; 32])
+        });
+        let state_root = Bytes32::from(unsafe {
+            core::ptr::read_unaligned(bytes.as_ptr().add(48) as *const [u8; 32])
+        });
+        let body_root = Bytes32::from(unsafe {
+            core::ptr::read_unaligned(bytes.as_ptr().add(80) as *const [u8; 32])
+        });
 
         Ok(Self {
-            slot: u64::decode_ssz(fields[0])?,
-            proposer_index: u64::decode_ssz(fields[1])?,
-            parent_root: Bytes32::decode_ssz(fields[2])?,
-            state_root: Bytes32::decode_ssz(fields[3])?,
-            body_root: Bytes32::decode_ssz(fields[4])?,
+            slot: u64::from_le(slot),
+            proposer_index: u64::from_le(proposer_index),
+            parent_root,
+            state_root,
+            body_root,
         })
     }
 }
