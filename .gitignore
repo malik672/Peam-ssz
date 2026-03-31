@@ -1,2 +1,5 @@
 /target
 /fuzz/target
+/profile.json.gz
+/encode-*.json.gz
+/var-list-*.json.gz
