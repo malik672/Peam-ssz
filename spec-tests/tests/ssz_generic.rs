@@ -725,7 +725,7 @@ impl SszDecode for VarTestStruct {
         )?;
         Ok(Self {
             a: u16::decode_ssz(slices[0])?,
-            b: SszList::<u16, 1024>::decode_ssz_checked(slices[1])?.data,
+            b: SszList::<u16, 1024>::decode_ssz_checked(slices[1])?.into_inner(),
             c: u8::decode_ssz(slices[2])?,
         })
     }
