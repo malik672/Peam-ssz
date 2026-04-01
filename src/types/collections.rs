@@ -272,6 +272,51 @@ where
         out
     }
 
+    fn encode_ssz_checked(&self) -> Result<Vec<u8>, String> {
+        if let Some(elem_len) = T::fixed_len_opt() {
+            let total = elem_len * LENGTH;
+            let mut out = Vec::with_capacity(total);
+            for item in &self.data {
+                let bytes = item.encode_ssz_checked()?;
+                if bytes.len() != elem_len {
+                    return Err(format!(
+                        "fixed-size SszVector element encoded to {} bytes, expected {}",
+                        bytes.len(),
+                        elem_len
+                    ));
+                }
+                out.extend_from_slice(&bytes);
+            }
+            return Ok(out);
+        }
+
+        let count = self.data.len();
+        let mut offsets = Vec::with_capacity(count);
+        let mut elems = Vec::with_capacity(count);
+        let mut cursor = 4 * count;
+        for item in &self.data {
+            let bytes = item.encode_ssz_checked()?;
+            // SSZ offsets are u32. We keep the direct cast here because the
+            // Ethereum-spec objects this crate targets do not approach 4 GiB
+            // variable payload sections in practice.
+            offsets.push(cursor as u32);
+            cursor += bytes.len();
+            elems.push(bytes);
+        }
+        let mut out = Vec::with_capacity(cursor);
+        unsafe { out.set_len(cursor) };
+        let mut cursor = 0usize;
+        for off in offsets {
+            unsafe { write_bytes_at(&mut out, cursor, &off.to_le_bytes()) };
+            cursor += 4;
+        }
+        for bytes in elems {
+            unsafe { write_bytes_at(&mut out, cursor, &bytes) };
+            cursor += bytes.len();
+        }
+        Ok(out)
+    }
+
     fn encode_ssz_into(&self, out: &mut Vec<u8>) {
         if let Some(elem_len) = T::fixed_len_opt() {
             let total = elem_len * LENGTH;
@@ -350,6 +395,51 @@ where
             payload_cursor += bytes.len();
         }
         out
+    }
+
+    fn encode_ssz_checked(&self) -> Result<Vec<u8>, String> {
+        if let Some(elem_len) = T::fixed_len_opt() {
+            let total = elem_len * self.data.len();
+            let mut out = Vec::with_capacity(total);
+            for item in &self.data {
+                let bytes = item.encode_ssz_checked()?;
+                if bytes.len() != elem_len {
+                    return Err(format!(
+                        "fixed-size SszList element encoded to {} bytes, expected {}",
+                        bytes.len(),
+                        elem_len
+                    ));
+                }
+                out.extend_from_slice(&bytes);
+            }
+            return Ok(out);
+        }
+
+        let count = self.data.len();
+        let mut offsets = Vec::with_capacity(count);
+        let mut elems = Vec::with_capacity(count);
+        let mut cursor = 4 * count;
+        for item in &self.data {
+            let bytes = item.encode_ssz_checked()?;
+            // SSZ offsets are u32. We keep the direct cast here because the
+            // Ethereum-spec objects this crate targets do not approach 4 GiB
+            // variable payload sections in practice.
+            offsets.push(cursor as u32);
+            cursor += bytes.len();
+            elems.push(bytes);
+        }
+        let mut out = Vec::with_capacity(cursor);
+        let table_len = 4 * count;
+        unsafe { out.set_len(cursor) };
+        for (idx, off) in offsets.iter().enumerate() {
+            unsafe { write_bytes_at(&mut out, idx * 4, &off.to_le_bytes()) };
+        }
+        let mut payload_cursor = table_len;
+        for bytes in elems {
+            unsafe { write_bytes_at(&mut out, payload_cursor, &bytes) };
+            payload_cursor += bytes.len();
+        }
+        Ok(out)
     }
 
     fn encode_ssz_into(&self, out: &mut Vec<u8>) {
@@ -587,6 +677,7 @@ impl<T, const LIMIT: usize> SszElement for SszList<T, LIMIT> {}
 mod tests {
     use super::{SszList, SszVector};
     use crate::ssz::SszEncode;
+    use crate::types::bitlist::BitVector;
 
     #[test]
     fn list_encode_into_matches_encode_ssz_for_nested_lists() {
@@ -634,5 +725,27 @@ mod tests {
         let decoded = SszList::<SszVector<u64, 0>, 4>::decode_ssz_checked(&outer.encode_ssz())
             .expect("zero-length vector list should decode");
         assert_eq!(decoded, outer);
+    }
+
+    #[test]
+    fn list_encode_ssz_checked_validates_elements() {
+        let invalid = BitVector::<3> { data: vec![0xff] };
+        let list = SszList::<BitVector<3>, 4>::new(vec![invalid]).unwrap();
+
+        assert_eq!(
+            list.encode_ssz_checked().unwrap_err(),
+            "BitVector has non-zero unused bits"
+        );
+    }
+
+    #[test]
+    fn vector_encode_ssz_checked_validates_elements() {
+        let invalid = BitVector::<3> { data: vec![0xff] };
+        let vector = SszVector::<BitVector<3>, 1>::new(vec![invalid]).unwrap();
+
+        assert_eq!(
+            vector.encode_ssz_checked().unwrap_err(),
+            "BitVector has non-zero unused bits"
+        );
     }
 }
