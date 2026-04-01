@@ -71,24 +71,21 @@ where
             let total = elem_len * self.data.len();
             let start = out.len();
             out.reserve(total);
-            let dst = unsafe { out.as_mut_ptr().add(start) };
-            for (idx, item) in self.data.iter().enumerate() {
-                let offset = idx * elem_len;
-                unsafe { item.write_fixed_ssz(dst.add(offset)) };
-            }
             unsafe { out.set_len(start + total) };
+            for (idx, item) in self.data.iter().enumerate() {
+                let offset = start + idx * elem_len;
+                unsafe { item.write_fixed_ssz(out.as_mut_ptr().add(offset)) };
+            }
             return;
         }
 
         let count = self.data.len();
         let table_start = out.len();
-        let table_len = count
-            .checked_mul(4)
-            .expect("ProgressiveList offset table length overflows usize");
-        out.resize(table_start + table_len, 0);
+        let table_len = 4 * count;
+        out.reserve(table_len);
+        unsafe { out.set_len(table_start + table_len) };
         for (idx, item) in self.data.iter().enumerate() {
-            let offset = u32::try_from(out.len() - table_start)
-                .expect("ProgressiveList offset exceeds u32::MAX");
+            let offset = (out.len() - table_start) as u32;
             unsafe { write_bytes_at(out, table_start + idx * 4, &offset.to_le_bytes()) };
             item.encode_ssz_into(out);
         }
@@ -316,10 +313,8 @@ impl SszEncode for ProgressiveBitlist {
         let start = out.len();
         let bytes = (self.len + 1).div_ceil(8);
         out.resize(start + bytes, 0);
-        let data_len = self.data_bytes_len();
-        if data_len != 0 {
-            self.fill_canonical_data(&mut out[start..start + data_len]);
-        }
+        let copy_len = self.data.len().min(bytes);
+        out[start..start + copy_len].copy_from_slice(&self.data[..copy_len]);
         let term_index = self.len;
         out[start + term_index / 8] |= 1u8 << (term_index % 8);
     }

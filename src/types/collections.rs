@@ -243,10 +243,10 @@ where
 
         let count = self.data.len();
         let mut offsets = Vec::with_capacity(count);
-        let mut elems: Vec<Vec<u8>> = Vec::with_capacity(count);
-        let elems_ptr: *mut Vec<u8> = elems.as_mut_ptr();
+        let mut elems = Vec::with_capacity(count);
         unsafe {
             offsets.set_len(count);
+            elems.set_len(count);
         }
         let mut cursor = 4 * count;
         for (idx, item) in self.data.iter().enumerate() {
@@ -256,10 +256,7 @@ where
             // variable payload sections in practice.
             unsafe { write_at(&mut offsets, idx, cursor as u32) };
             cursor += bytes.len();
-            unsafe {
-                core::ptr::write(elems_ptr.add(idx), bytes);
-                elems.set_len(idx + 1);
-            }
+            unsafe { write_at(&mut elems, idx, bytes) };
         }
         let mut out = Vec::with_capacity(cursor);
         unsafe { out.set_len(cursor) };
@@ -280,19 +277,19 @@ where
             let total = elem_len * LENGTH;
             let start = out.len();
             out.reserve(total);
-            let dst = unsafe { out.as_mut_ptr().add(start) };
-            for (idx, item) in self.data.iter().enumerate() {
-                let offset = idx * elem_len;
-                unsafe { item.write_fixed_ssz(dst.add(offset)) };
-            }
             unsafe { out.set_len(start + total) };
+            for (idx, item) in self.data.iter().enumerate() {
+                let offset = start + idx * elem_len;
+                unsafe { item.write_fixed_ssz(out.as_mut_ptr().add(offset)) };
+            }
             return;
         }
 
         let count = self.data.len();
         let table_start = out.len();
         let table_len = 4 * count;
-        out.resize(table_start + table_len, 0);
+        out.reserve(table_len);
+        unsafe { out.set_len(table_start + table_len) };
         for (idx, item) in self.data.iter().enumerate() {
             let offset = (out.len() - table_start) as u32;
             unsafe { write_bytes_at(out, table_start + idx * 4, &offset.to_le_bytes()) };
@@ -329,20 +326,17 @@ where
 
         let count = self.data.len();
         let mut offsets = Vec::with_capacity(count);
-        let mut elems: Vec<Vec<u8>> = Vec::with_capacity(count);
-        let elems_ptr: *mut Vec<u8> = elems.as_mut_ptr();
+        let mut elems = Vec::with_capacity(count);
         unsafe {
             offsets.set_len(count);
+            elems.set_len(count);
         }
         let mut cursor = 4 * count;
         for (idx, item) in self.data.iter().enumerate() {
             let bytes = item.encode_ssz();
             unsafe { write_at(&mut offsets, idx, cursor as u32) };
             cursor += bytes.len();
-            unsafe {
-                core::ptr::write(elems_ptr.add(idx), bytes);
-                elems.set_len(idx + 1);
-            }
+            unsafe { write_at(&mut elems, idx, bytes) };
         }
         let mut out = Vec::with_capacity(cursor);
         let table_len = 4 * count;
@@ -363,19 +357,19 @@ where
             let total = elem_len * self.data.len();
             let start = out.len();
             out.reserve(total);
-            let dst = unsafe { out.as_mut_ptr().add(start) };
-            for (idx, item) in self.data.iter().enumerate() {
-                let offset = idx * elem_len;
-                unsafe { item.write_fixed_ssz(dst.add(offset)) };
-            }
             unsafe { out.set_len(start + total) };
+            for (idx, item) in self.data.iter().enumerate() {
+                let offset = start + idx * elem_len;
+                unsafe { item.write_fixed_ssz(out.as_mut_ptr().add(offset)) };
+            }
             return;
         }
 
         let count = self.data.len();
         let table_start = out.len();
         let table_len = 4 * count;
-        out.resize(table_start + table_len, 0);
+        out.reserve(table_len);
+        unsafe { out.set_len(table_start + table_len) };
         for (idx, item) in self.data.iter().enumerate() {
             let offset = (out.len() - table_start) as u32;
             unsafe { write_bytes_at(out, table_start + idx * 4, &offset.to_le_bytes()) };
