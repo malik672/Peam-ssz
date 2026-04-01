@@ -8,9 +8,25 @@ pub mod hash;
 mod primitives;
 
 /// Encodes a value into its SSZ byte representation.
+///
+/// The library exposes both unchecked and checked entry points:
+/// - [`SszEncode::encode_ssz`] is the low-level path and may trust internal
+///   invariants for performance.
+/// - [`SszEncode::encode_ssz_checked`] is the defensive path for types whose
+///   public state can be constructed in non-canonical forms and need explicit
+///   validation before producing SSZ bytes.
 pub trait SszEncode {
     /// Encodes a value into a freshly allocated SSZ byte buffer.
     fn encode_ssz(&self) -> Vec<u8>;
+
+    /// Encodes a value into a freshly allocated SSZ byte buffer after
+    /// performing any type-specific validation needed for canonical output.
+    ///
+    /// The default implementation preserves backwards compatibility for types
+    /// that have no extra checked-vs-unchecked distinction.
+    fn encode_ssz_checked(&self) -> Result<Vec<u8>, String> {
+        Ok(self.encode_ssz())
+    }
 
     /// Appends the SSZ byte representation to an existing buffer.
     ///
@@ -44,7 +60,11 @@ pub trait SszEncode {
 /// Decodes a value from SSZ bytes.
 ///
 /// Most callers should prefer a checked constructor on container/list wrappers
-/// before falling back to raw `decode_ssz`.
+/// before falling back to raw `decode_ssz`. In other words:
+/// - [`SszDecode::decode_ssz`] is the low-level path and assumes the caller
+///   has already validated the input for the target type.
+/// - checked wrappers such as `decode_ssz_checked` on collection/bitfield
+///   types perform the additional validation needed for safe public use.
 pub trait SszDecode: Sized {
     /// Safety: This assumes the caller validated length/limits/offsets.
     /// Passing malformed input is undefined behavior at the library level.
