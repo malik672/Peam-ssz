@@ -10,17 +10,17 @@ mod primitives;
 /// Encodes a value into its SSZ byte representation.
 pub trait SszEncode {
     /// Encodes a value into a freshly allocated SSZ byte buffer.
-    fn encode_ssz(&self) -> Vec<u8> {
-        let mut out = Vec::new();
-        self.encode_ssz_into(&mut out);
-        out
-    }
+    fn encode_ssz(&self) -> Vec<u8>;
 
     /// Appends the SSZ byte representation to an existing buffer.
     ///
     /// Implementations should prefer writing directly into `out` instead of
-    /// allocating a temporary `Vec<u8>` when possible.
-    fn encode_ssz_into(&self, out: &mut Vec<u8>);
+    /// allocating a temporary `Vec<u8>` when possible. The default
+    /// implementation preserves backwards compatibility for callers that only
+    /// implement [`SszEncode::encode_ssz`].
+    fn encode_ssz_into(&self, out: &mut Vec<u8>) {
+        out.extend_from_slice(&self.encode_ssz());
+    }
 
     /// Writes the fixed-size SSZ representation directly into `dst`.
     ///
@@ -30,8 +30,15 @@ pub trait SszEncode {
     ///
     /// The caller must guarantee that `dst..dst + encoded_len` is valid for
     /// writes, where `encoded_len` is the statically known fixed-size SSZ
-    /// length for this type.
-    unsafe fn write_fixed_ssz(&self, dst: *mut u8);
+    /// length for this type. The default implementation preserves
+    /// backwards-compatibility but allocates, so hot fixed-size types should
+    /// still override it with a direct write.
+    unsafe fn write_fixed_ssz(&self, dst: *mut u8) {
+        let bytes = self.encode_ssz();
+        unsafe {
+            core::ptr::copy_nonoverlapping(bytes.as_ptr(), dst, bytes.len());
+        }
+    }
 }
 
 /// Decodes a value from SSZ bytes.

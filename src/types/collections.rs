@@ -167,7 +167,7 @@ impl<T, const LIMIT: usize> SszList<T, LIMIT> {
 
 impl<T, const LENGTH: usize> SszEncode for SszVector<T, LENGTH>
 where
-    T: SszEncode + SszElement + 'static,
+    T: SszEncode + SszElement,
 {
     fn encode_ssz(&self) -> Vec<u8> {
         if let Some(elem_len) = T::fixed_len_opt() {
@@ -247,7 +247,7 @@ where
 
 impl<T, const LIMIT: usize> SszEncode for SszList<T, LIMIT>
 where
-    T: SszEncode + SszElement + 'static,
+    T: SszEncode + SszElement,
 {
     fn encode_ssz(&self) -> Vec<u8> {
         if let Some(elem_len) = T::fixed_len_opt() {
@@ -450,7 +450,7 @@ where
 
 impl<T, const LENGTH: usize> HashTreeRoot for SszVector<T, LENGTH>
 where
-    T: SszEncode + SszElement + HashTreeRoot + 'static,
+    T: SszEncode + SszElement + HashTreeRoot,
 {
     fn hash_tree_root(&self) -> [u8; 32] {
         if let Some(elem_len) = T::fixed_len_opt().filter(|_| T::tree_pack_basic()) {
@@ -476,7 +476,7 @@ where
 
 impl<T, const LIMIT: usize> HashTreeRoot for SszList<T, LIMIT>
 where
-    T: SszEncode + SszElement + HashTreeRoot + 'static,
+    T: SszEncode + SszElement + HashTreeRoot,
 {
     fn hash_tree_root(&self) -> [u8; 32] {
         if let Some(elem_len) = T::fixed_len_opt().filter(|_| T::tree_pack_basic()) {

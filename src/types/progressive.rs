@@ -191,7 +191,7 @@ where
 
 impl<T> HashTreeRoot for ProgressiveList<T>
 where
-    T: SszEncode + SszElement + HashTreeRoot + 'static,
+    T: SszEncode + SszElement + HashTreeRoot,
 {
     /// Computes the progressive list root and mixes in the current length.
     fn hash_tree_root(&self) -> [u8; 32] {

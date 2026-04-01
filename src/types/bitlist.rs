@@ -116,6 +116,23 @@ pub struct BitVector<const LENGTH: usize> {
 }
 
 impl<const LENGTH: usize> BitVector<LENGTH> {
+    #[inline]
+    fn expected_bytes() -> usize {
+        LENGTH.div_ceil(8)
+    }
+
+    #[inline]
+    fn encoded_bytes(&self) -> &[u8] {
+        let expected = Self::expected_bytes();
+        assert!(
+            self.data.len() == expected,
+            "BitVector expects {} bytes, got {}",
+            expected,
+            self.data.len()
+        );
+        &self.data
+    }
+
     /// Packs a boolean vector into fixed-size SSZ bitvector storage.
     pub fn new(data: Vec<bool>) -> Result<Self, String> {
         if data.len() != LENGTH {
@@ -136,11 +153,11 @@ impl<const LENGTH: usize> BitVector<LENGTH> {
     }
 
     fn pack_bits(&self) -> Vec<u8> {
-        self.data.clone()
+        self.encoded_bytes().to_vec()
     }
 
     fn unpack_bits(bytes: &[u8]) -> Result<Vec<u8>, String> {
-        let expected = LENGTH.div_ceil(8);
+        let expected = Self::expected_bytes();
         if bytes.len() != expected {
             return Err(format!(
                 "BitVector expects {} bytes, got {}",
@@ -170,12 +187,13 @@ impl<const LENGTH: usize> SszEncode for BitVector<LENGTH> {
     }
 
     fn encode_ssz_into(&self, out: &mut Vec<u8>) {
-        out.extend_from_slice(&self.data);
+        out.extend_from_slice(self.encoded_bytes());
     }
 
     unsafe fn write_fixed_ssz(&self, dst: *mut u8) {
+        let bytes = self.encoded_bytes();
         unsafe {
-            core::ptr::copy_nonoverlapping(self.data.as_ptr(), dst, self.data.len());
+            core::ptr::copy_nonoverlapping(bytes.as_ptr(), dst, bytes.len());
         }
     }
 }
@@ -200,7 +218,7 @@ impl<const LENGTH: usize> HashTreeRoot for BitVector<LENGTH> {
 
 impl<const LENGTH: usize> SszElement for BitVector<LENGTH> {
     fn fixed_len_opt() -> Option<usize> {
-        Some(LENGTH.div_ceil(8))
+        Some(BitVector::<LENGTH>::expected_bytes())
     }
 }
 
@@ -242,3 +260,17 @@ impl<const LIMIT: usize> HashTreeRoot for BitList<LIMIT> {
 }
 
 impl<const LIMIT: usize> SszElement for BitList<LIMIT> {}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    #[should_panic(expected = "BitVector expects 1 bytes, got 2")]
+    fn bitvector_encode_rejects_invalid_internal_length() {
+        let value = BitVector::<8> {
+            data: vec![0u8; 2],
+        };
+        let _ = value.encode_ssz();
+    }
+}
