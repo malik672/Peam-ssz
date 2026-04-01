@@ -18,7 +18,7 @@ use crate::unsafe_vec::{write_at, write_bytes_at};
 #[derive(Clone, Debug, Eq, PartialEq)]
 pub struct SszVector<T, const LENGTH: usize> {
     /// Backing elements in SSZ order.
-    pub data: Vec<T>,
+    data: Vec<T>,
 }
 
 /// Variable-length homogeneous sequence bounded by `LIMIT` elements.
@@ -30,7 +30,7 @@ pub struct SszVector<T, const LENGTH: usize> {
 #[derive(Clone, Debug, Eq, PartialEq)]
 pub struct SszList<T, const LIMIT: usize> {
     /// Backing elements in SSZ order.
-    pub data: Vec<T>,
+    data: Vec<T>,
 }
 
 impl<T, const LENGTH: usize> SszVector<T, LENGTH> {
@@ -44,6 +44,36 @@ impl<T, const LENGTH: usize> SszVector<T, LENGTH> {
             ));
         }
         Ok(Self { data })
+    }
+
+    /// Returns the backing elements as a slice.
+    #[inline]
+    pub fn as_slice(&self) -> &[T] {
+        &self.data
+    }
+
+    /// Iterates over elements in SSZ order.
+    #[inline]
+    pub fn iter(&self) -> core::slice::Iter<'_, T> {
+        self.data.iter()
+    }
+
+    /// Returns the exact element count for this vector.
+    #[inline]
+    pub fn len(&self) -> usize {
+        LENGTH
+    }
+
+    /// Returns `true` when the vector length is zero.
+    #[inline]
+    pub fn is_empty(&self) -> bool {
+        LENGTH == 0
+    }
+
+    /// Consumes the wrapper and returns the backing elements.
+    #[inline]
+    pub fn into_inner(self) -> Vec<T> {
+        self.data
     }
 
     /// Validates vector byte layout before calling raw [`SszDecode`].
@@ -107,6 +137,36 @@ impl<T, const LIMIT: usize> SszList<T, LIMIT> {
             ));
         }
         Ok(Self { data })
+    }
+
+    /// Returns the backing elements as a slice.
+    #[inline]
+    pub fn as_slice(&self) -> &[T] {
+        &self.data
+    }
+
+    /// Iterates over elements in SSZ order.
+    #[inline]
+    pub fn iter(&self) -> core::slice::Iter<'_, T> {
+        self.data.iter()
+    }
+
+    /// Returns the current element count.
+    #[inline]
+    pub fn len(&self) -> usize {
+        self.data.len()
+    }
+
+    /// Returns `true` when the list has no elements.
+    #[inline]
+    pub fn is_empty(&self) -> bool {
+        self.data.is_empty()
+    }
+
+    /// Consumes the wrapper and returns the backing elements.
+    #[inline]
+    pub fn into_inner(self) -> Vec<T> {
+        self.data
     }
 
     /// Validates list byte layout and limit checks before decoding elements.
@@ -183,17 +243,20 @@ where
 
         let count = self.data.len();
         let mut offsets = Vec::with_capacity(count);
-        let mut elems = Vec::with_capacity(count);
+        let mut elems: Vec<Vec<u8>> = Vec::with_capacity(count);
+        let elems_ptr: *mut Vec<u8> = elems.as_mut_ptr();
         unsafe {
             offsets.set_len(count);
-            elems.set_len(count);
         }
         let mut cursor = 4 * count;
         for (idx, item) in self.data.iter().enumerate() {
             let bytes = item.encode_ssz();
             unsafe { write_at(&mut offsets, idx, cursor as u32) };
             cursor += bytes.len();
-            unsafe { write_at(&mut elems, idx, bytes) };
+            unsafe {
+                core::ptr::write(elems_ptr.add(idx), bytes);
+                elems.set_len(idx + 1);
+            }
         }
         let mut out = Vec::with_capacity(cursor);
         unsafe { out.set_len(cursor) };
@@ -214,19 +277,19 @@ where
             let total = elem_len * LENGTH;
             let start = out.len();
             out.reserve(total);
-            unsafe { out.set_len(start + total) };
+            let dst = unsafe { out.as_mut_ptr().add(start) };
             for (idx, item) in self.data.iter().enumerate() {
-                let offset = start + idx * elem_len;
-                unsafe { item.write_fixed_ssz(out.as_mut_ptr().add(offset)) };
+                let offset = idx * elem_len;
+                unsafe { item.write_fixed_ssz(dst.add(offset)) };
             }
+            unsafe { out.set_len(start + total) };
             return;
         }
 
         let count = self.data.len();
         let table_start = out.len();
         let table_len = 4 * count;
-        out.reserve(table_len);
-        unsafe { out.set_len(table_start + table_len) };
+        out.resize(table_start + table_len, 0);
         for (idx, item) in self.data.iter().enumerate() {
             let offset = (out.len() - table_start) as u32;
             unsafe { write_bytes_at(out, table_start + idx * 4, &offset.to_le_bytes()) };
@@ -263,17 +326,20 @@ where
 
         let count = self.data.len();
         let mut offsets = Vec::with_capacity(count);
-        let mut elems = Vec::with_capacity(count);
+        let mut elems: Vec<Vec<u8>> = Vec::with_capacity(count);
+        let elems_ptr: *mut Vec<u8> = elems.as_mut_ptr();
         unsafe {
             offsets.set_len(count);
-            elems.set_len(count);
         }
         let mut cursor = 4 * count;
         for (idx, item) in self.data.iter().enumerate() {
             let bytes = item.encode_ssz();
             unsafe { write_at(&mut offsets, idx, cursor as u32) };
             cursor += bytes.len();
-            unsafe { write_at(&mut elems, idx, bytes) };
+            unsafe {
+                core::ptr::write(elems_ptr.add(idx), bytes);
+                elems.set_len(idx + 1);
+            }
         }
         let mut out = Vec::with_capacity(cursor);
         let table_len = 4 * count;
@@ -294,19 +360,19 @@ where
             let total = elem_len * self.data.len();
             let start = out.len();
             out.reserve(total);
-            unsafe { out.set_len(start + total) };
+            let dst = unsafe { out.as_mut_ptr().add(start) };
             for (idx, item) in self.data.iter().enumerate() {
-                let offset = start + idx * elem_len;
-                unsafe { item.write_fixed_ssz(out.as_mut_ptr().add(offset)) };
+                let offset = idx * elem_len;
+                unsafe { item.write_fixed_ssz(dst.add(offset)) };
             }
+            unsafe { out.set_len(start + total) };
             return;
         }
 
         let count = self.data.len();
         let table_start = out.len();
         let table_len = 4 * count;
-        out.reserve(table_len);
-        unsafe { out.set_len(table_start + table_len) };
+        out.resize(table_start + table_len, 0);
         for (idx, item) in self.data.iter().enumerate() {
             let offset = (out.len() - table_start) as u32;
             unsafe { write_bytes_at(out, table_start + idx * 4, &offset.to_le_bytes()) };
@@ -502,7 +568,15 @@ where
     }
 }
 
-impl<T, const LENGTH: usize> SszElement for SszVector<T, LENGTH> {}
+impl<T, const LENGTH: usize> SszElement for SszVector<T, LENGTH>
+where
+    T: SszElement,
+{
+    fn fixed_len_opt() -> Option<usize> {
+        T::fixed_len_opt().and_then(|elem_len| elem_len.checked_mul(LENGTH))
+    }
+}
+
 impl<T, const LIMIT: usize> SszElement for SszList<T, LIMIT> {}
 
 #[cfg(test)]
@@ -530,5 +604,19 @@ mod tests {
         vector.encode_ssz_into(&mut out);
 
         assert_eq!(out, vector.encode_ssz());
+    }
+
+    #[test]
+    fn list_of_fixed_vectors_encodes_without_offsets() {
+        let first = SszVector::<u64, 2>::new(vec![1, 2]).unwrap();
+        let second = SszVector::<u64, 2>::new(vec![3, 4]).unwrap();
+        let outer = SszList::<SszVector<u64, 2>, 4>::new(vec![first, second]).unwrap();
+
+        let mut expected = Vec::new();
+        for value in [1u64, 2, 3, 4] {
+            expected.extend_from_slice(&value.to_le_bytes());
+        }
+
+        assert_eq!(outer.encode_ssz(), expected);
     }
 }

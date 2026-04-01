@@ -71,21 +71,24 @@ where
             let total = elem_len * self.data.len();
             let start = out.len();
             out.reserve(total);
-            unsafe { out.set_len(start + total) };
+            let dst = unsafe { out.as_mut_ptr().add(start) };
             for (idx, item) in self.data.iter().enumerate() {
-                let offset = start + idx * elem_len;
-                unsafe { item.write_fixed_ssz(out.as_mut_ptr().add(offset)) };
+                let offset = idx * elem_len;
+                unsafe { item.write_fixed_ssz(dst.add(offset)) };
             }
+            unsafe { out.set_len(start + total) };
             return;
         }
 
         let count = self.data.len();
         let table_start = out.len();
-        let table_len = 4 * count;
-        out.reserve(table_len);
-        unsafe { out.set_len(table_start + table_len) };
+        let table_len = count
+            .checked_mul(4)
+            .expect("ProgressiveList offset table length overflows usize");
+        out.resize(table_start + table_len, 0);
         for (idx, item) in self.data.iter().enumerate() {
-            let offset = (out.len() - table_start) as u32;
+            let offset = u32::try_from(out.len() - table_start)
+                .expect("ProgressiveList offset exceeds u32::MAX");
             unsafe { write_bytes_at(out, table_start + idx * 4, &offset.to_le_bytes()) };
             item.encode_ssz_into(out);
         }
@@ -238,11 +241,44 @@ impl ProgressiveBitlist {
         Self { data: packed, len }
     }
 
+    #[inline]
+    fn data_bytes_len(&self) -> usize {
+        self.len.div_ceil(8)
+    }
+
+    #[inline]
+    fn fill_canonical_data(&self, out: &mut [u8]) {
+        let byte_len = self.data_bytes_len();
+        assert!(
+            out.len() == byte_len,
+            "ProgressiveBitlist expects {} data bytes, got {}",
+            byte_len,
+            out.len()
+        );
+        out.fill(0);
+        let copy_len = self.data.len().min(byte_len);
+        out[..copy_len].copy_from_slice(&self.data[..copy_len]);
+        if byte_len != 0 && !self.len.is_multiple_of(8) {
+            let used_bits = self.len % 8;
+            let mask = (1u8 << used_bits) - 1;
+            out[byte_len - 1] &= mask;
+        }
+    }
+
+    #[inline]
+    fn canonical_data_bytes(&self) -> Vec<u8> {
+        let mut out = vec![0u8; self.data_bytes_len()];
+        self.fill_canonical_data(&mut out);
+        out
+    }
+
     fn pack_bits_with_terminator(&self) -> Vec<u8> {
         let out_len = (self.len + 1).div_ceil(8);
         let mut out = vec![0u8; out_len];
-        let copy_len = self.data.len().min(out_len);
-        out[..copy_len].copy_from_slice(&self.data[..copy_len]);
+        let data_len = self.data_bytes_len();
+        if data_len != 0 {
+            self.fill_canonical_data(&mut out[..data_len]);
+        }
         let term_index = self.len;
         out[term_index / 8] |= 1u8 << (term_index % 8);
         out
@@ -280,8 +316,10 @@ impl SszEncode for ProgressiveBitlist {
         let start = out.len();
         let bytes = (self.len + 1).div_ceil(8);
         out.resize(start + bytes, 0);
-        let copy_len = self.data.len().min(bytes);
-        out[start..start + copy_len].copy_from_slice(&self.data[..copy_len]);
+        let data_len = self.data_bytes_len();
+        if data_len != 0 {
+            self.fill_canonical_data(&mut out[start..start + data_len]);
+        }
         let term_index = self.len;
         out[start + term_index / 8] |= 1u8 << (term_index % 8);
     }
@@ -302,7 +340,8 @@ impl SszDecode for ProgressiveBitlist {
 impl HashTreeRoot for ProgressiveBitlist {
     /// Computes the progressive bitlist root and mixes in the logical bit length.
     fn hash_tree_root(&self) -> [u8; 32] {
-        let chunks = pack_bytes(&self.data);
+        let canonical = self.canonical_data_bytes();
+        let chunks = pack_bytes(&canonical);
         let root = merkleize_progressive(&chunks);
         let mixed = mix_in_length(&root, self.len);
         *mixed.as_ref()
@@ -310,3 +349,30 @@ impl HashTreeRoot for ProgressiveBitlist {
 }
 
 impl SszElement for ProgressiveBitlist {}
+
+#[cfg(test)]
+mod tests {
+    use super::ProgressiveBitlist;
+    use crate::ssz::{HashTreeRoot, SszEncode};
+
+    #[test]
+    fn progressive_bitlist_encode_and_htr_canonicalize_backing_storage() {
+        let canonical = ProgressiveBitlist {
+            data: vec![0b0000_0111],
+            len: 3,
+        };
+        let noncanonical = ProgressiveBitlist {
+            data: vec![0b1111_1111, 0b1010_1010],
+            len: 3,
+        };
+
+        assert_eq!(canonical.encode_ssz(), vec![0b0000_1111]);
+        assert_eq!(noncanonical.encode_ssz(), vec![0b0000_1111]);
+
+        let mut out = Vec::new();
+        noncanonical.encode_ssz_into(&mut out);
+        assert_eq!(out, vec![0b0000_1111]);
+
+        assert_eq!(canonical.hash_tree_root(), noncanonical.hash_tree_root());
+    }
+}
