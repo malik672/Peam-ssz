@@ -251,6 +251,9 @@ where
         let mut cursor = 4 * count;
         for (idx, item) in self.data.iter().enumerate() {
             let bytes = item.encode_ssz();
+            // SSZ offsets are u32. We keep the direct cast here because the
+            // Ethereum-spec objects this crate targets do not approach 4 GiB
+            // variable payload sections in practice.
             unsafe { write_at(&mut offsets, idx, cursor as u32) };
             cursor += bytes.len();
             unsafe {
@@ -573,6 +576,13 @@ where
     T: SszElement,
 {
     fn fixed_len_opt() -> Option<usize> {
+        if LENGTH == 0 {
+            // Zero-length vectors encode to empty bytes, but treating them as
+            // fixed-size list elements would make `SszList<SszVector<_, 0>, _>`
+            // ambiguous to decode because every list length would serialize to
+            // the same empty payload. Keep them on the offset-table path.
+            return None;
+        }
         T::fixed_len_opt().and_then(|elem_len| elem_len.checked_mul(LENGTH))
     }
 }
@@ -618,5 +628,17 @@ mod tests {
         }
 
         assert_eq!(outer.encode_ssz(), expected);
+    }
+
+    #[test]
+    fn list_of_zero_length_vectors_uses_offsets_and_round_trips() {
+        let first = SszVector::<u64, 0>::new(vec![]).unwrap();
+        let second = SszVector::<u64, 0>::new(vec![]).unwrap();
+        let outer = SszList::<SszVector<u64, 0>, 4>::new(vec![first, second]).unwrap();
+
+        assert_eq!(outer.encode_ssz(), vec![8, 0, 0, 0, 8, 0, 0, 0]);
+        let decoded = SszList::<SszVector<u64, 0>, 4>::decode_ssz_checked(&outer.encode_ssz())
+            .expect("zero-length vector list should decode");
+        assert_eq!(decoded, outer);
     }
 }
