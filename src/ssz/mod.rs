@@ -8,14 +8,63 @@ pub mod hash;
 mod primitives;
 
 /// Encodes a value into its SSZ byte representation.
+///
+/// The library exposes both unchecked and checked entry points:
+/// - [`SszEncode::encode_ssz`] is the low-level path and may trust internal
+///   invariants for performance.
+/// - [`SszEncode::encode_ssz_checked`] is the defensive path for types whose
+///   public state can be constructed in non-canonical forms and need explicit
+///   validation before producing SSZ bytes.
 pub trait SszEncode {
+    /// Encodes a value into a freshly allocated SSZ byte buffer.
     fn encode_ssz(&self) -> Vec<u8>;
+
+    /// Encodes a value into a freshly allocated SSZ byte buffer after
+    /// performing any type-specific validation needed for canonical output.
+    ///
+    /// The default implementation preserves backwards compatibility for types
+    /// that have no extra checked-vs-unchecked distinction.
+    fn encode_ssz_checked(&self) -> Result<Vec<u8>, String> {
+        Ok(self.encode_ssz())
+    }
+
+    /// Appends the SSZ byte representation to an existing buffer.
+    ///
+    /// Implementations should prefer writing directly into `out` instead of
+    /// allocating a temporary `Vec<u8>` when possible. The default
+    /// implementation preserves backwards compatibility for callers that only
+    /// implement [`SszEncode::encode_ssz`].
+    fn encode_ssz_into(&self, out: &mut Vec<u8>) {
+        out.extend_from_slice(&self.encode_ssz());
+    }
+
+    /// Writes the fixed-size SSZ representation directly into `dst`.
+    ///
+    /// This must only be implemented for types whose encoded size is known
+    /// statically. Variable-size types should make misuse explicit (for example
+    /// by panicking) instead of silently allocating through a fallback path.
+    ///
+    /// The caller must guarantee that `dst..dst + encoded_len` is valid for
+    /// writes, where `encoded_len` is the statically known fixed-size SSZ
+    /// length for this type. The default implementation preserves
+    /// backwards-compatibility but allocates, so hot fixed-size types should
+    /// still override it with a direct write.
+    unsafe fn write_fixed_ssz(&self, dst: *mut u8) {
+        let bytes = self.encode_ssz();
+        unsafe {
+            core::ptr::copy_nonoverlapping(bytes.as_ptr(), dst, bytes.len());
+        }
+    }
 }
 
 /// Decodes a value from SSZ bytes.
 ///
 /// Most callers should prefer a checked constructor on container/list wrappers
-/// before falling back to raw `decode_ssz`.
+/// before falling back to raw `decode_ssz`. In other words:
+/// - [`SszDecode::decode_ssz`] is the low-level path and assumes the caller
+///   has already validated the input for the target type.
+/// - checked wrappers such as `decode_ssz_checked` on collection/bitfield
+///   types perform the additional validation needed for safe public use.
 pub trait SszDecode: Sized {
     /// Safety: This assumes the caller validated length/limits/offsets.
     /// Passing malformed input is undefined behavior at the library level.

@@ -7,6 +7,16 @@ impl SszEncode for bool {
     fn encode_ssz(&self) -> Vec<u8> {
         vec![u8::from(*self)]
     }
+
+    #[inline]
+    fn encode_ssz_into(&self, out: &mut Vec<u8>) {
+        out.push(u8::from(*self));
+    }
+
+    #[inline]
+    unsafe fn write_fixed_ssz(&self, dst: *mut u8) {
+        unsafe { core::ptr::write(dst, u8::from(*self)) };
+    }
 }
 
 impl SszDecode for bool {
@@ -48,6 +58,19 @@ macro_rules! impl_uint_ssz {
             #[inline]
             fn encode_ssz(&self) -> Vec<u8> {
                 self.to_le_bytes().to_vec()
+            }
+
+            #[inline]
+            fn encode_ssz_into(&self, out: &mut Vec<u8>) {
+                out.extend_from_slice(&self.to_le_bytes());
+            }
+
+            #[inline]
+            unsafe fn write_fixed_ssz(&self, dst: *mut u8) {
+                let bytes = self.to_le_bytes();
+                unsafe {
+                    core::ptr::copy_nonoverlapping(bytes.as_ptr(), dst, $len);
+                }
             }
         }
 
@@ -99,6 +122,18 @@ impl<const N: usize> SszEncode for [u8; N] {
     #[inline]
     fn encode_ssz(&self) -> Vec<u8> {
         self.to_vec()
+    }
+
+    #[inline]
+    fn encode_ssz_into(&self, out: &mut Vec<u8>) {
+        out.extend_from_slice(self);
+    }
+
+    #[inline]
+    unsafe fn write_fixed_ssz(&self, dst: *mut u8) {
+        unsafe {
+            core::ptr::copy_nonoverlapping(self.as_ptr(), dst, N);
+        }
     }
 }
 

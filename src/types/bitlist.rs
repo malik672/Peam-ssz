@@ -44,11 +44,44 @@ impl<const LIMIT: usize> BitList<LIMIT> {
     }
 
     #[inline]
+    fn data_bytes_len(&self) -> usize {
+        self.len.div_ceil(8)
+    }
+
+    #[inline]
+    fn fill_canonical_data(&self, out: &mut [u8]) {
+        let byte_len = self.data_bytes_len();
+        assert!(
+            out.len() == byte_len,
+            "BitList expects {} data bytes, got {}",
+            byte_len,
+            out.len()
+        );
+        out.fill(0);
+        let copy_len = self.data.len().min(byte_len);
+        out[..copy_len].copy_from_slice(&self.data[..copy_len]);
+        if byte_len != 0 && !self.len.is_multiple_of(8) {
+            let used_bits = self.len % 8;
+            let mask = (1u8 << used_bits) - 1;
+            out[byte_len - 1] &= mask;
+        }
+    }
+
+    #[inline]
+    fn canonical_data_bytes(&self) -> Vec<u8> {
+        let mut out = vec![0u8; self.data_bytes_len()];
+        self.fill_canonical_data(&mut out);
+        out
+    }
+
+    #[inline]
     fn pack_bits_with_terminator(&self) -> Vec<u8> {
         let out_len = (self.len + 1).div_ceil(8);
         let mut out = vec![0u8; out_len];
-        let copy_len = self.data.len().min(out_len);
-        out[..copy_len].copy_from_slice(&self.data[..copy_len]);
+        let data_len = self.data_bytes_len();
+        if data_len != 0 {
+            self.fill_canonical_data(&mut out[..data_len]);
+        }
         let term_index = self.len;
         out[term_index / 8] |= 1u8 << (term_index % 8);
         out
@@ -116,6 +149,58 @@ pub struct BitVector<const LENGTH: usize> {
 }
 
 impl<const LENGTH: usize> BitVector<LENGTH> {
+    #[inline]
+    fn expected_bytes() -> usize {
+        LENGTH.div_ceil(8)
+    }
+
+    #[inline]
+    fn has_valid_unused_bits(bytes: &[u8]) -> bool {
+        if !LENGTH.is_multiple_of(8) {
+            let used_bits = LENGTH % 8;
+            let mask = (1u8 << used_bits) - 1;
+            return bytes[bytes.len() - 1] & !mask == 0;
+        }
+        true
+    }
+
+    #[inline]
+    fn validate_unused_bits(bytes: &[u8]) {
+        assert!(
+            Self::has_valid_unused_bits(bytes),
+            "BitVector has non-zero unused bits"
+        );
+    }
+
+    #[inline]
+    fn checked_bytes(&self) -> Result<&[u8], String> {
+        let expected = Self::expected_bytes();
+        if self.data.len() != expected {
+            return Err(format!(
+                "BitVector expects {} bytes, got {}",
+                expected,
+                self.data.len()
+            ));
+        }
+        if !Self::has_valid_unused_bits(&self.data) {
+            return Err("BitVector has non-zero unused bits".to_string());
+        }
+        Ok(&self.data)
+    }
+
+    #[inline]
+    fn encoded_bytes(&self) -> &[u8] {
+        let expected = Self::expected_bytes();
+        assert!(
+            self.data.len() == expected,
+            "BitVector expects {} bytes, got {}",
+            expected,
+            self.data.len()
+        );
+        Self::validate_unused_bits(&self.data);
+        &self.data
+    }
+
     /// Packs a boolean vector into fixed-size SSZ bitvector storage.
     pub fn new(data: Vec<bool>) -> Result<Self, String> {
         if data.len() != LENGTH {
@@ -136,11 +221,11 @@ impl<const LENGTH: usize> BitVector<LENGTH> {
     }
 
     fn pack_bits(&self) -> Vec<u8> {
-        self.data.clone()
+        self.encoded_bytes().to_vec()
     }
 
     fn unpack_bits(bytes: &[u8]) -> Result<Vec<u8>, String> {
-        let expected = LENGTH.div_ceil(8);
+        let expected = Self::expected_bytes();
         if bytes.len() != expected {
             return Err(format!(
                 "BitVector expects {} bytes, got {}",
@@ -149,9 +234,7 @@ impl<const LENGTH: usize> BitVector<LENGTH> {
             ));
         }
         if !LENGTH.is_multiple_of(8) {
-            let used_bits = LENGTH % 8;
-            let mask = (1u8 << used_bits) - 1;
-            if bytes[expected - 1] & !mask != 0 {
+            if !Self::has_valid_unused_bits(bytes) {
                 return Err("BitVector has non-zero unused bits".to_string());
             }
         }
@@ -167,6 +250,21 @@ impl<const LENGTH: usize> BitVector<LENGTH> {
 impl<const LENGTH: usize> SszEncode for BitVector<LENGTH> {
     fn encode_ssz(&self) -> Vec<u8> {
         self.pack_bits()
+    }
+
+    fn encode_ssz_checked(&self) -> Result<Vec<u8>, String> {
+        Ok(self.checked_bytes()?.to_vec())
+    }
+
+    fn encode_ssz_into(&self, out: &mut Vec<u8>) {
+        out.extend_from_slice(self.encoded_bytes());
+    }
+
+    unsafe fn write_fixed_ssz(&self, dst: *mut u8) {
+        let bytes = self.encoded_bytes();
+        unsafe {
+            core::ptr::copy_nonoverlapping(bytes.as_ptr(), dst, bytes.len());
+        }
     }
 }
 
@@ -190,13 +288,36 @@ impl<const LENGTH: usize> HashTreeRoot for BitVector<LENGTH> {
 
 impl<const LENGTH: usize> SszElement for BitVector<LENGTH> {
     fn fixed_len_opt() -> Option<usize> {
-        Some(LENGTH.div_ceil(8))
+        Some(BitVector::<LENGTH>::expected_bytes())
     }
 }
 
 impl<const LIMIT: usize> SszEncode for BitList<LIMIT> {
     fn encode_ssz(&self) -> Vec<u8> {
         self.pack_bits_with_terminator()
+    }
+
+    fn encode_ssz_checked(&self) -> Result<Vec<u8>, String> {
+        if self.len > LIMIT {
+            return Err(format!("BitList length {} exceeds limit {}", self.len, LIMIT));
+        }
+        Ok(self.pack_bits_with_terminator())
+    }
+
+    fn encode_ssz_into(&self, out: &mut Vec<u8>) {
+        let start = out.len();
+        let bytes = (self.len + 1).div_ceil(8);
+        out.resize(start + bytes, 0);
+        let data_len = self.data_bytes_len();
+        if data_len != 0 {
+            self.fill_canonical_data(&mut out[start..start + data_len]);
+        }
+        let term_index = self.len;
+        out[start + term_index / 8] |= 1u8 << (term_index % 8);
+    }
+
+    unsafe fn write_fixed_ssz(&self, _dst: *mut u8) {
+        panic!("BitList is variable-size and cannot be written via write_fixed_ssz");
     }
 }
 
@@ -209,7 +330,8 @@ impl<const LIMIT: usize> SszDecode for BitList<LIMIT> {
 
 impl<const LIMIT: usize> HashTreeRoot for BitList<LIMIT> {
     fn hash_tree_root(&self) -> [u8; 32] {
-        let chunks = chunkify_fixed(&self.data);
+        let canonical = self.canonical_data_bytes();
+        let chunks = chunkify_fixed(&canonical);
         let limit_chunks = LIMIT.div_ceil(BYTES_PER_CHUNK * 8);
         let root = merkleize_with_limit(&chunks, limit_chunks).unwrap_or_else(|_| Bytes32::zero());
         let mixed = mix_in_length(&root, self.len);
@@ -218,3 +340,71 @@ impl<const LIMIT: usize> HashTreeRoot for BitList<LIMIT> {
 }
 
 impl<const LIMIT: usize> SszElement for BitList<LIMIT> {}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use crate::ssz::SszEncode;
+
+    #[test]
+    #[should_panic(expected = "BitVector expects 1 bytes, got 2")]
+    fn bitvector_encode_rejects_invalid_internal_length() {
+        let value = BitVector::<8> {
+            data: vec![0u8; 2],
+        };
+        let _ = value.encode_ssz();
+    }
+
+    #[test]
+    #[should_panic(expected = "BitVector has non-zero unused bits")]
+    fn bitvector_encode_rejects_non_zero_unused_bits() {
+        let value = BitVector::<9> {
+            data: vec![0u8, 0b1111_1110],
+        };
+        let _ = value.encode_ssz();
+    }
+
+    #[test]
+    fn bitlist_encode_and_htr_canonicalize_backing_storage() {
+        let canonical = BitList::<8> {
+            data: vec![0b0000_0111],
+            len: 3,
+        };
+        let noncanonical = BitList::<8> {
+            data: vec![0b1111_1111, 0b1010_1010],
+            len: 3,
+        };
+
+        assert_eq!(canonical.encode_ssz(), vec![0b0000_1111]);
+        assert_eq!(noncanonical.encode_ssz(), vec![0b0000_1111]);
+
+        let mut out = Vec::new();
+        noncanonical.encode_ssz_into(&mut out);
+        assert_eq!(out, vec![0b0000_1111]);
+
+        assert_eq!(canonical.hash_tree_root(), noncanonical.hash_tree_root());
+    }
+
+    #[test]
+    fn bitvector_encode_checked_rejects_invalid_internal_state() {
+        let value = BitVector::<9> {
+            data: vec![0u8, 0b1111_1110],
+        };
+        assert_eq!(
+            value.encode_ssz_checked().unwrap_err(),
+            "BitVector has non-zero unused bits"
+        );
+    }
+
+    #[test]
+    fn bitlist_encode_checked_rejects_length_over_limit() {
+        let value = BitList::<3> {
+            data: vec![0u8],
+            len: 4,
+        };
+        assert_eq!(
+            value.encode_ssz_checked().unwrap_err(),
+            "BitList length 4 exceeds limit 3"
+        );
+    }
+}

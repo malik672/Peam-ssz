@@ -44,6 +44,17 @@ pub fn make_vec_u64(n: usize) -> Vec<u64> {
     (0..n).map(|i| i as u64).collect()
 }
 
+/// Builds a deterministic nested list so Peam exercises the variable-size list path.
+pub fn make_nested_vec_u64(outer: usize, inner: usize) -> Vec<Vec<u64>> {
+    (0..outer)
+        .map(|i| {
+            (0..inner)
+                .map(|j| (i as u64).wrapping_mul(1_000_003).wrapping_add(j as u64))
+                .collect()
+        })
+        .collect()
+}
+
 /// Encodes a reference value once so decode benches do not measure setup work.
 pub fn pre_encode<T: SszEncode>(value: &T) -> Vec<u8> {
     value.to_ssz()

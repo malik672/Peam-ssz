@@ -59,6 +59,21 @@ impl SszEncode for Bytes32 {
         unsafe { write_bytes_at(&mut out, 0, &self.0) };
         out
     }
+
+    #[inline]
+    fn encode_ssz_into(&self, out: &mut Vec<u8>) {
+        let start = out.len();
+        out.reserve(32);
+        unsafe { out.set_len(start + 32) };
+        unsafe { write_bytes_at(out, start, &self.0) };
+    }
+
+    #[inline]
+    unsafe fn write_fixed_ssz(&self, dst: *mut u8) {
+        unsafe {
+            core::ptr::copy_nonoverlapping(self.0.as_ptr(), dst, 32);
+        }
+    }
 }
 
 impl SszDecode for Bytes32 {

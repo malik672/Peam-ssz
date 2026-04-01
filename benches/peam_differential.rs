@@ -7,7 +7,7 @@
 mod fixtures;
 
 use criterion::{black_box, criterion_group, criterion_main, BenchmarkId, Criterion, Throughput};
-use fixtures::{make_header, make_vec_u64, pre_encode, BeaconBlockHeader};
+use fixtures::{make_header, make_nested_vec_u64, make_vec_u64, pre_encode, BeaconBlockHeader};
 use libssz::{SszDecode as LibSszDecode, SszEncode as LibSszEncode};
 use libssz_merkle::HashTreeRoot as LibHashTreeRoot;
 use peam_ssz::ssz::{
@@ -130,7 +130,7 @@ fn diff_peam_encode_bytes32(c: &mut Criterion) {
 fn diff_peam_encode_vec_u64(c: &mut Criterion) {
     let mut group = c.benchmark_group("diff_peam/encode/vec_u64");
     for &size in &[1_000usize, 100_000] {
-        let data = make_vec_u64(size);
+        let data = make_vec_u64(size); 
         let peam = PeamList::<u64, PEAM_VEC_LIMIT>::new(data.clone()).unwrap();
         let ssz_rs = ssz_rs::List::<u64, PEAM_VEC_LIMIT>::try_from(data.clone()).unwrap();
 
@@ -170,6 +170,61 @@ fn diff_peam_encode_header(c: &mut Criterion) {
     });
     group.bench_function("peam", |b| b.iter(|| black_box(&peam_header).encode_ssz()));
 
+    group.finish();
+}
+
+/// Exercises Peam's variable-size list encoding with nested `SszList<u64>` payloads.
+fn diff_peam_encode_var_list(c: &mut Criterion) {
+    let mut group = c.benchmark_group("diff_peam/encode/var_list");
+    for &(outer, inner) in &[(256usize, 16usize), (1024, 16)] {
+        let nested = make_nested_vec_u64(outer, inner);
+        let peam = PeamList::<PeamList<u64, PEAM_VEC_LIMIT>, PEAM_VEC_LIMIT>::new(
+            nested
+                .into_iter()
+                .map(|inner| PeamList::<u64, PEAM_VEC_LIMIT>::new(inner).unwrap())
+                .collect(),
+        )
+        .unwrap();
+
+        group.throughput(Throughput::Elements(outer as u64));
+        group.bench_with_input(
+            BenchmarkId::new("peam", format!("{outer}x{inner}")),
+            &peam,
+            |b, data| {
+                b.iter(|| black_box(data).encode_ssz());
+            },
+        );
+    }
+    group.finish();
+}
+
+/// Exercises Peam's direct append path for nested variable-size list encoding.
+fn diff_peam_encode_into_var_list(c: &mut Criterion) {
+    let mut group = c.benchmark_group("diff_peam/encode_into/var_list");
+    for &(outer, inner) in &[(256usize, 16usize), (1024, 16)] {
+        let nested = make_nested_vec_u64(outer, inner);
+        let peam = PeamList::<PeamList<u64, PEAM_VEC_LIMIT>, PEAM_VEC_LIMIT>::new(
+            nested
+                .into_iter()
+                .map(|inner| PeamList::<u64, PEAM_VEC_LIMIT>::new(inner).unwrap())
+                .collect(),
+        )
+        .unwrap();
+
+        group.throughput(Throughput::Elements(outer as u64));
+        group.bench_with_input(
+            BenchmarkId::new("peam", format!("{outer}x{inner}")),
+            &peam,
+            |b, data| {
+                let mut out = Vec::new();
+                b.iter(|| {
+                    out.clear();
+                    black_box(data).encode_ssz_into(&mut out);
+                    black_box(&out);
+                });
+            },
+        );
+    }
     group.finish();
 }
 
@@ -349,6 +404,8 @@ criterion_group!(
     diff_peam_encode_primitives,
     diff_peam_encode_bytes32,
     diff_peam_encode_vec_u64,
+    diff_peam_encode_var_list,
+    diff_peam_encode_into_var_list,
     diff_peam_encode_header,
     diff_peam_decode_primitives,
     diff_peam_decode_bytes32,
