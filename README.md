@@ -1,5 +1,8 @@
 # peam-ssz
 
+[![crates.io](https://img.shields.io/crates/v/peam-ssz.svg)](https://crates.io/crates/peam-ssz)
+[![docs.rs](https://img.shields.io/docsrs/peam-ssz)](https://docs.rs/peam-ssz)
+
 `peam-ssz` is the extracted SSZ/merkleization crate from [Peam](https://github.com/malik672/Peam), a minimal performance-first Lean/Ethereum consensus client written in Rust.
 
 The goal here is simple:
@@ -11,9 +14,10 @@ Right now the crate depends on `sha2` and otherwise keeps the core implementatio
 
 ## Project Links
 
+- Crate: [crates.io/crates/peam-ssz](https://crates.io/crates/peam-ssz)
+- API docs: [docs.rs/peam-ssz](https://docs.rs/peam-ssz)
 - Repository: [malik672/Peam-ssz](https://github.com/malik672/Peam-ssz)
 - Upstream client: [malik672/Peam](https://github.com/malik672/Peam)
-- API docs: `https://docs.rs/peam-ssz` after crates.io publication
 
 ## Origins
 
