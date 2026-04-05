@@ -35,6 +35,57 @@ pub struct SszList<T, const LIMIT: usize> {
     data: Vec<T>,
 }
 
+#[inline]
+fn pack_basic_fixed_chunks<T>(items: &[T], elem_len: usize) -> Vec<Bytes32>
+where
+    T: SszEncode,
+{
+    let total = items.len() * elem_len;
+    if total == 0 {
+        return Vec::new();
+    }
+
+    if elem_len > BYTES_PER_CHUNK {
+        let mut bytes = Vec::with_capacity(total);
+        for item in items {
+            item.encode_ssz_into(&mut bytes);
+        }
+        return chunkify_fixed_non_empty(&bytes);
+    }
+
+    let chunk_count = total.div_ceil(BYTES_PER_CHUNK);
+    let mut chunks = Vec::with_capacity(chunk_count);
+    let mut chunk = [0u8; 32];
+    let mut filled = 0usize;
+
+    for item in items {
+        let mut elem_buf = [0u8; 32];
+        unsafe { item.write_fixed_ssz(elem_buf.as_mut_ptr()) };
+        let mut src_start = 0usize;
+
+        while src_start < elem_len {
+            let space = BYTES_PER_CHUNK - filled;
+            let to_copy = (elem_len - src_start).min(space);
+            chunk[filled..filled + to_copy]
+                .copy_from_slice(&elem_buf[src_start..src_start + to_copy]);
+            filled += to_copy;
+            src_start += to_copy;
+
+            if filled == BYTES_PER_CHUNK {
+                chunks.push(Bytes32::from(chunk));
+                chunk = [0u8; 32];
+                filled = 0;
+            }
+        }
+    }
+
+    if filled != 0 {
+        chunks.push(Bytes32::from(chunk));
+    }
+
+    chunks
+}
+
 impl<T, const LENGTH: usize> SszVector<T, LENGTH> {
     /// Constructs a vector and enforces the exact SSZ element count.
     pub fn new(data: Vec<T>) -> Result<Self, String> {
