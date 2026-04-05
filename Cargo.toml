@@ -2,6 +2,14 @@
 name = "peam-ssz"
 version = "0.1.0"
 edition = "2024"
+description = "Minimal performance-focused SSZ encoding, decoding, and merkleization crate extracted from Peam"
+license = "MIT"
+repository = "https://github.com/malik672/Peam-ssz"
+homepage = "https://github.com/malik672/Peam-ssz"
+documentation = "https://docs.rs/peam-ssz"
+readme = "README.md"
+keywords = ["ethereum", "ssz", "consensus", "merkle", "serialization"]
+categories = ["encoding", "cryptography::cryptocurrencies"]
 
 [workspace]
 resolver = "3"

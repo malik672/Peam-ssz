@@ -9,6 +9,12 @@ The goal here is simple:
 
 Right now the crate depends on `sha2` and otherwise keeps the core implementation local.
 
+## Project Links
+
+- Repository: [malik672/Peam-ssz](https://github.com/malik672/Peam-ssz)
+- Upstream client: [malik672/Peam](https://github.com/malik672/Peam)
+- API docs: `https://docs.rs/peam-ssz` after crates.io publication
+
 ## Origins
 
 This crate started as a direct extraction of Peam's internal SSZ code which was copied from SigmaPrime ethssz and then grew into a standalone testable library.
