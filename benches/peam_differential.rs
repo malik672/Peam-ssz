@@ -399,6 +399,33 @@ fn diff_peam_htr(c: &mut Criterion) {
     group.finish();
 }
 
+/// Compares hash-tree-root performance for large fixed-element lists.
+fn diff_peam_htr_vec_u64(c: &mut Criterion) {
+    let mut group = c.benchmark_group("diff_peam/htr/vec_u64");
+    for &size in &[1_000usize, 100_000] {
+        let data = make_vec_u64(size);
+        let ssz_rs = ssz_rs::List::<u64, PEAM_VEC_LIMIT>::try_from(data.clone()).unwrap();
+        let peam = PeamList::<u64, PEAM_VEC_LIMIT>::new(data.clone()).unwrap();
+
+        group.throughput(Throughput::Elements(size as u64));
+        group.bench_with_input(BenchmarkId::new("libssz", size), &data, |b, data| {
+            b.iter(|| {
+                LibHashTreeRoot::hash_tree_root(black_box(data), &libssz_merkle::Sha2Hasher)
+            });
+        });
+        group.bench_with_input(BenchmarkId::new("ssz_rs", size), &ssz_rs, |b, data| {
+            b.iter(|| {
+                let mut value = black_box(data).clone();
+                ssz_rs::Merkleized::hash_tree_root(&mut value).unwrap()
+            });
+        });
+        group.bench_with_input(BenchmarkId::new("peam", size), &peam, |b, data| {
+            b.iter(|| black_box(data).hash_tree_root());
+        });
+    }
+    group.finish();
+}
+
 criterion_group!(
     benches,
     diff_peam_encode_primitives,
@@ -412,5 +439,6 @@ criterion_group!(
     diff_peam_decode_vec_u64,
     diff_peam_decode_header,
     diff_peam_htr,
+    diff_peam_htr_vec_u64,
 );
 criterion_main!(benches);

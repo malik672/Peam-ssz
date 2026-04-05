@@ -142,7 +142,7 @@ The tables below use the median point estimate from the latest local Criterion r
 | `[u8; 32]` | `17.942 ns` | `19.635 ns` | `20.415 ns` | `820.09 ns` | `1.09x faster` | `1.14x faster` | `45.71x faster` |
 | `Vec<u64> (1K)` | `105.22 ns` | `116.18 ns` | `426.44 ns` | `22.484 us` | `1.10x faster` | `4.05x faster` | `213.69x faster` |
 | `Vec<u64> (100K)` | `11.045 us` | `12.394 us` | `55.006 us` | `2.2138 ms` | `1.12x faster` | `4.98x faster` | `200.43x faster` |
-| `BeaconBlockHeader` | `18.034 ns` | `19.660 ns` | `134.39 ns` | `2.3907 us` | `1.09x faster` | `7.45x faster` | `132.57x faster` |
+| `BeaconBlockHeader` | `21.878 ns` | `25.406 ns` | `153.93 ns` | `2.991 us` | `1.16x faster` | `7.04x faster` | `136.71x faster` |
 
 ### Decode
 
@@ -153,7 +153,7 @@ The tables below use the median point estimate from the latest local Criterion r
 | `[u8; 32]` | `4.0330 ns` | `4.3548 ns` | `4.1102 ns` | `78.057 ns` | `1.08x faster` | `1.02x faster` | `19.35x faster` |
 | `Vec<u64> (1K)` | `106.25 ns` | `113.45 ns` | `1.2193 us` | `762.90 ns` | `1.07x faster` | `11.48x faster` | `7.18x faster` |
 | `Vec<u64> (100K)` | `10.108 us` | `12.117 us` | `162.24 us` | `129.38 us` | `1.20x faster` | `16.05x faster` | `12.80x faster` |
-| `BeaconBlockHeader` | `12.523 ns` | `14.542 ns` | `12.129 ns` | `319.82 ns` | `1.16x faster` | `1.03x slower` | `25.54x faster` |
+| `BeaconBlockHeader` | `32.020 ns` | `65.699 ns` | `39.000 ns` | `2.187 us` | `2.05x faster` | `1.22x faster` | `68.30x faster` |
 
 ### Hash Tree Root
 
@@ -162,6 +162,8 @@ The tables below use the median point estimate from the latest local Criterion r
 | `bool` | `3.0366 ns` | `3.0363 ns` | `3.1981 ns` | `3.1296 ns` | `~1.00x` | `1.05x faster` | `1.03x faster` |
 | `u64` | `3.0365 ns` | `3.0397 ns` | `3.1523 ns` | `58.072 ns` | `~1.00x` | `1.04x faster` | `19.12x faster` |
 | `[u8; 32]` | `3.5222 ns` | `3.5403 ns` | `3.5426 ns` | `103.81 ns` | `~1.00x` | `~1.00x` | `29.47x faster` |
+| `Vec<u64> (1K)` | `74.922 us` | `73.807 us` | `n/a` | `75.770 us` | `1.02x slower` | `n/a` | `1.01x faster` |
+| `Vec<u64> (100K)` | `7.138 ms` | `9.319 ms` | `n/a` | `7.394 ms` | `1.31x faster` | `n/a` | `1.04x faster` |
 
 Peam-only header HTR measurement in the current harness:
 

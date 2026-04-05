@@ -1,8 +1,6 @@
 use crate::ssz::{HashTreeRoot, SszDecode, SszEncode, SszFixedLen};
 use crate::types::bytes::Bytes32;
-use crate::types::container::{
-    Container, EncodedContainerField, encode_fields, hash_tree_root_from_field_roots,
-};
+use crate::types::container::{Container, hash_tree_root_from_field_roots};
 
 /// Minimal fixed-layout beacon block header used for benchmark and fixture parity work.
 #[derive(Clone, Debug, Eq, PartialEq)]
@@ -24,19 +22,9 @@ impl Container for BeaconBlockHeader {}
 impl SszEncode for BeaconBlockHeader {
     /// Encodes the header as a 112-byte fixed-layout SSZ container.
     fn encode_ssz(&self) -> Vec<u8> {
-        let slot = self.slot.encode_ssz();
-        let proposer_index = self.proposer_index.encode_ssz();
-        let parent_root = self.parent_root.encode_ssz();
-        let state_root = self.state_root.encode_ssz();
-        let body_root = self.body_root.encode_ssz();
-
-        encode_fields(&[
-            EncodedContainerField::Fixed(&slot),
-            EncodedContainerField::Fixed(&proposer_index),
-            EncodedContainerField::Fixed(&parent_root),
-            EncodedContainerField::Fixed(&state_root),
-            EncodedContainerField::Fixed(&body_root),
-        ])
+        let mut out = Vec::with_capacity(112);
+        self.encode_ssz_into(&mut out);
+        out
     }
 
     /// Appends the encoded fixed-layout header to an existing buffer.

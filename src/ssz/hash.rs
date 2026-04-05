@@ -30,6 +30,14 @@ pub fn chunkify_fixed(data: &[u8]) -> Vec<Bytes32> {
     if data.is_empty() {
         return vec![Bytes32::zero()];
     }
+    chunkify_fixed_non_empty(data)
+}
+
+/// Splits a non-empty fixed byte slice into 32-byte chunks, zero-padding the
+/// tail chunk.
+#[inline]
+pub fn chunkify_fixed_non_empty(data: &[u8]) -> Vec<Bytes32> {
+    debug_assert!(!data.is_empty());
 
     // This is at most 32
     let chunk_count = (data.len() + BYTES_PER_CHUNK - 1) / BYTES_PER_CHUNK;
@@ -54,7 +62,7 @@ pub fn pack_bytes(data: &[u8]) -> Vec<Bytes32> {
     if data.is_empty() {
         return Vec::new();
     }
-    chunkify_fixed(data)
+    chunkify_fixed_non_empty(data)
 }
 
 /// Merkleizes a chunk list using the chunk count as the width limit.

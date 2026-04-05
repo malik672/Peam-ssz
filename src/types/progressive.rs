@@ -282,10 +282,7 @@ impl ProgressiveBitlist {
     }
 
     fn unpack_bits_with_terminator(bytes: &[u8]) -> Result<(Vec<u8>, usize), String> {
-        if bytes.is_empty() {
-            return Err("bitlist missing length marker".to_string());
-        }
-        let last_byte = *bytes.last().unwrap();
+        let last_byte = *bytes.last().unwrap_or(&0);
         if last_byte == 0 {
             return Err("bitlist missing length marker".to_string());
         }
@@ -296,7 +293,10 @@ impl ProgressiveBitlist {
         let mut data = bytes.to_vec();
         let needed_bytes = bit_len.div_ceil(8);
         data.truncate(needed_bytes);
-        if needed_bytes == bytes.len() && !data.is_empty() {
+
+        // `needed_bytes == bytes.len()` only when the terminator sits in the
+        // final byte, which implies `needed_bytes > 0`.
+        if needed_bytes == bytes.len() {
             data[needed_bytes - 1] &= !(1 << highest_bit);
         }
         Ok((data, bit_len))
@@ -313,8 +313,10 @@ impl SszEncode for ProgressiveBitlist {
         let start = out.len();
         let bytes = (self.len + 1).div_ceil(8);
         out.resize(start + bytes, 0);
-        let copy_len = self.data.len().min(bytes);
-        out[start..start + copy_len].copy_from_slice(&self.data[..copy_len]);
+        let data_len = self.data_bytes_len();
+        if data_len != 0 {
+            self.fill_canonical_data(&mut out[start..start + data_len]);
+        }
         let term_index = self.len;
         out[start + term_index / 8] |= 1u8 << (term_index % 8);
     }
