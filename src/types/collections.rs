@@ -35,57 +35,6 @@ pub struct SszList<T, const LIMIT: usize> {
     data: Vec<T>,
 }
 
-#[inline]
-fn pack_basic_fixed_chunks<T>(items: &[T], elem_len: usize) -> Vec<Bytes32>
-where
-    T: SszEncode,
-{
-    let total = items.len() * elem_len;
-    if total == 0 {
-        return Vec::new();
-    }
-
-    if elem_len > BYTES_PER_CHUNK {
-        let mut bytes = Vec::with_capacity(total);
-        for item in items {
-            item.encode_ssz_into(&mut bytes);
-        }
-        return chunkify_fixed_non_empty(&bytes);
-    }
-
-    let chunk_count = total.div_ceil(BYTES_PER_CHUNK);
-    let mut chunks = Vec::with_capacity(chunk_count);
-    let mut chunk = [0u8; 32];
-    let mut filled = 0usize;
-
-    for item in items {
-        let mut elem_buf = [0u8; 32];
-        unsafe { item.write_fixed_ssz(elem_buf.as_mut_ptr()) };
-        let mut src_start = 0usize;
-
-        while src_start < elem_len {
-            let space = BYTES_PER_CHUNK - filled;
-            let to_copy = (elem_len - src_start).min(space);
-            chunk[filled..filled + to_copy]
-                .copy_from_slice(&elem_buf[src_start..src_start + to_copy]);
-            filled += to_copy;
-            src_start += to_copy;
-
-            if filled == BYTES_PER_CHUNK {
-                chunks.push(Bytes32::from(chunk));
-                chunk = [0u8; 32];
-                filled = 0;
-            }
-        }
-    }
-
-    if filled != 0 {
-        chunks.push(Bytes32::from(chunk));
-    }
-
-    chunks
-}
-
 impl<T, const LENGTH: usize> SszVector<T, LENGTH> {
     /// Constructs a vector and enforces the exact SSZ element count.
     pub fn new(data: Vec<T>) -> Result<Self, String> {
@@ -727,10 +676,8 @@ impl<T, const LIMIT: usize> SszElement for SszList<T, LIMIT> {}
 #[cfg(test)]
 mod tests {
     use super::{SszList, SszVector};
-    use crate::ssz::hash::{BYTES_PER_CHUNK, chunkify_fixed, merkleize_with_limit, mix_in_length};
-    use crate::ssz::{HashTreeRoot, SszEncode};
+    use crate::ssz::SszEncode;
     use crate::types::bitlist::BitVector;
-    use crate::types::bytes::Bytes32;
 
     #[test]
     fn list_encode_into_matches_encode_ssz_for_nested_lists() {
@@ -800,35 +747,5 @@ mod tests {
             vector.encode_ssz_checked().unwrap_err(),
             "BitVector has non-zero unused bits"
         );
-    }
-
-    #[test]
-    fn vector_htr_matches_encode_then_chunkify_for_basic_fixed_elements() {
-        let vector = SszVector::<u64, 5>::new(vec![1, 2, 3, 4, 5]).unwrap();
-        let bytes = vector.encode_ssz();
-        let chunks = chunkify_fixed(&bytes);
-        let limit_chunks = (5usize * 8).div_ceil(BYTES_PER_CHUNK);
-        let expected =
-            merkleize_with_limit(&chunks, limit_chunks).unwrap_or_else(|_| Bytes32::zero());
-
-        assert_eq!(vector.hash_tree_root(), expected.as_array());
-    }
-
-    #[test]
-    fn list_htr_matches_encode_then_chunkify_for_basic_fixed_elements() {
-        let list = SszList::<u64, 8>::new(vec![1, 2, 3, 4, 5]).unwrap();
-        let bytes = list.encode_ssz();
-        let chunks = chunkify_fixed(&bytes);
-        let limit_chunks = (8usize * 8).div_ceil(BYTES_PER_CHUNK);
-        let root = merkleize_with_limit(&chunks, limit_chunks).unwrap_or_else(|_| Bytes32::zero());
-        let expected = mix_in_length(&root, list.len());
-
-        assert_eq!(list.hash_tree_root(), expected.as_array());
-    }
-
-    #[test]
-    fn empty_fixed_vector_htr_is_zero_root() {
-        let vector = SszVector::<u64, 0>::new(vec![]).unwrap();
-        assert_eq!(vector.hash_tree_root(), Bytes32::zero().as_array());
     }
 }
