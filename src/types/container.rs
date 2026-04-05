@@ -171,15 +171,13 @@ pub fn hash_tree_root_progressive_container(
     field_roots: &[[u8; 32]],
     active_fields: &[bool],
 ) -> [u8; 32] {
-    let mut chunks = Vec::with_capacity(active_fields.len());
+    let mut chunks = vec![Bytes32::zero(); active_fields.len()];
     let mut field_idx = 0usize;
-    for &active in active_fields {
+    for (chunk_idx, &active) in active_fields.iter().enumerate() {
         if active {
-            chunks.push(Bytes32::from(field_roots[field_idx]));
+            chunks[chunk_idx] = Bytes32::from(field_roots[field_idx]);
             field_idx += 1;
-        } else {
-            chunks.push(Bytes32::zero());
-        }
+         }
     }
     assert_eq!(field_idx, field_roots.len());
 

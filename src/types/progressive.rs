@@ -246,7 +246,9 @@ impl ProgressiveBitlist {
     #[inline]
     fn fill_canonical_data(&self, out: &mut [u8]) {
         let byte_len = self.data_bytes_len();
-        assert!(
+        // Internal callers pass an exact-length output slice for the canonical
+        // packed data region; keep this as a debug-only contract check.
+        debug_assert!(
             out.len() == byte_len,
             "ProgressiveBitlist expects {} data bytes, got {}",
             byte_len,
