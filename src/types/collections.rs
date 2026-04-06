@@ -6,7 +6,7 @@
 use crate::ssz::hash::{
     BYTES_PER_CHUNK, chunkify_fixed_non_empty, merkleize_with_limit, mix_in_length,
 };
-use crate::ssz::{HashTreeRoot, SszDecode, SszElement, SszEncode};
+use crate::ssz::{HashTreeRoot, SszDecode, SszElement, SszEncode, SszFixedLen};
 use crate::types::bytes::Bytes32;
 use crate::unsafe_vec::{write_at, write_bytes_at};
 
@@ -20,7 +20,7 @@ use crate::unsafe_vec::{write_at, write_bytes_at};
 #[derive(Clone, Debug, Eq, PartialEq)]
 pub struct SszVector<T, const LENGTH: usize> {
     /// Backing elements in SSZ order.
-    data: Vec<T>,
+    pub data: Vec<T>,
 }
 
 /// Variable-length homogeneous sequence bounded by `LIMIT` elements.
@@ -32,7 +32,7 @@ pub struct SszVector<T, const LENGTH: usize> {
 #[derive(Clone, Debug, Eq, PartialEq)]
 pub struct SszList<T, const LIMIT: usize> {
     /// Backing elements in SSZ order.
-    data: Vec<T>,
+    pub data: Vec<T>,
 }
 
 #[inline]
@@ -127,6 +127,29 @@ impl<T, const LENGTH: usize> SszVector<T, LENGTH> {
     #[inline]
     pub fn into_inner(self) -> Vec<T> {
         self.data
+    }
+
+    /// Encodes a fixed-size vector into caller-provided storage without allocation.
+    ///
+    /// `out` must be exactly `T::fixed_len() * LENGTH` bytes long.
+    pub fn encode_ssz_fixed_into(&self, out: &mut [u8])
+    where
+        T: SszFixedLen + SszEncode + SszElement,
+    {
+        let elem_len = T::fixed_len();
+        let expected = elem_len
+            .checked_mul(LENGTH)
+            .expect("SszVector fixed length overflows usize");
+        debug_assert!(
+            out.len() == expected,
+            "fixed-size SszVector encode expects {} bytes, got {}",
+            expected,
+            out.len()
+        );
+        for (idx, item) in self.data.iter().enumerate() {
+            let offset = idx * elem_len;
+            unsafe { item.write_fixed_ssz(out.as_mut_ptr().add(offset)) };
+        }
     }
 
     /// Validates vector byte layout before calling raw [`SszDecode`].
@@ -798,5 +821,15 @@ mod tests {
             vector.encode_ssz_checked().unwrap_err(),
             "BitVector has non-zero unused bits"
         );
+    }
+
+    #[test]
+    fn fixed_vector_fixed_encode_matches_vec_encode() {
+        let vector = SszVector::<u64, 2>::new(vec![1, 2]).unwrap();
+
+        let mut out = [0u8; 16];
+        vector.encode_ssz_fixed_into(&mut out);
+
+        assert_eq!(out.as_slice(), vector.encode_ssz().as_slice());
     }
 }
