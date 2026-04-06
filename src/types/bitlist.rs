@@ -1,6 +1,6 @@
 //! SSZ bitlist and bitvector helpers.
 use crate::ssz::hash::{BYTES_PER_CHUNK, chunkify_fixed, merkleize_with_limit, mix_in_length};
-use crate::ssz::{HashTreeRoot, SszDecode, SszElement, SszEncode};
+use crate::ssz::{HashTreeRoot, SszDecode, SszElement, SszEncode, SszFixedLen};
 use crate::types::bytes::Bytes32;
 
 /// Variable-length bitfield bounded by `LIMIT` bits.
@@ -288,9 +288,9 @@ impl<const LENGTH: usize> HashTreeRoot for BitVector<LENGTH> {
     }
 }
 
-impl<const LENGTH: usize> SszElement for BitVector<LENGTH> {
-    fn fixed_len_opt() -> Option<usize> {
-        Some(BitVector::<LENGTH>::expected_bytes())
+impl<const LENGTH: usize> SszFixedLen for BitVector<LENGTH> {
+    fn fixed_len() -> usize {
+        Self::expected_bytes()
     }
 }
 
@@ -346,7 +346,7 @@ impl<const LIMIT: usize> SszElement for BitList<LIMIT> {}
 #[cfg(test)]
 mod tests {
     use super::*;
-    use crate::ssz::SszEncode;
+    use crate::ssz::{SszEncode, SszEncodeFixed};
 
     #[test]
     #[should_panic(expected = "BitVector expects 1 bytes, got 2")]
@@ -408,5 +408,17 @@ mod tests {
             value.encode_ssz_checked().unwrap_err(),
             "BitList length 4 exceeds limit 3"
         );
+    }
+
+    #[test]
+    fn bitvector_fixed_encode_matches_vec_encode() {
+        let value = BitVector::<9> {
+            data: vec![0b1010_1010, 0b0000_0001],
+        };
+
+        let mut out = [0u8; 2];
+        value.encode_ssz_fixed_into(&mut out);
+
+        assert_eq!(out.as_slice(), value.encode_ssz().as_slice());
     }
 }

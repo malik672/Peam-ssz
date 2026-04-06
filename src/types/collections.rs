@@ -6,7 +6,7 @@
 use crate::ssz::hash::{
     BYTES_PER_CHUNK, chunkify_fixed_non_empty, merkleize_with_limit, mix_in_length,
 };
-use crate::ssz::{HashTreeRoot, SszDecode, SszElement, SszEncode};
+use crate::ssz::{HashTreeRoot, SszDecode, SszElement, SszEncode, SszFixedLen};
 use crate::types::bytes::Bytes32;
 use crate::unsafe_vec::{write_at, write_bytes_at};
 
@@ -105,10 +105,22 @@ impl<T, const LENGTH: usize> SszVector<T, LENGTH> {
         &self.data
     }
 
+    /// Returns the backing elements as a mutable slice.
+    #[inline]
+    pub fn as_mut_slice(&mut self) -> &mut [T] {
+        &mut self.data
+    }
+
     /// Iterates over elements in SSZ order.
     #[inline]
     pub fn iter(&self) -> core::slice::Iter<'_, T> {
         self.data.iter()
+    }
+
+    /// Iterates mutably over elements in SSZ order.
+    #[inline]
+    pub fn iter_mut(&mut self) -> core::slice::IterMut<'_, T> {
+        self.data.iter_mut()
     }
 
     /// Returns the exact element count for this vector.
@@ -127,6 +139,65 @@ impl<T, const LENGTH: usize> SszVector<T, LENGTH> {
     #[inline]
     pub fn into_inner(self) -> Vec<T> {
         self.data
+    }
+
+    /// Returns the element at `index`, if present.
+    #[inline]
+    pub fn get(&self, index: usize) -> Option<&T> {
+        self.data.get(index)
+    }
+
+    /// Returns the element at `index` mutably, if present.
+    #[inline]
+    pub fn get_mut(&mut self, index: usize) -> Option<&mut T> {
+        self.data.get_mut(index)
+    }
+
+    /// Returns the first element, if present.
+    #[inline]
+    pub fn first(&self) -> Option<&T> {
+        self.data.first()
+    }
+
+    /// Returns the first element mutably, if present.
+    #[inline]
+    pub fn first_mut(&mut self) -> Option<&mut T> {
+        self.data.first_mut()
+    }
+
+    /// Returns the last element, if present.
+    #[inline]
+    pub fn last(&self) -> Option<&T> {
+        self.data.last()
+    }
+
+    /// Returns the last element mutably, if present.
+    #[inline]
+    pub fn last_mut(&mut self) -> Option<&mut T> {
+        self.data.last_mut()
+    }
+
+    /// Encodes a fixed-size vector into caller-provided storage without allocation.
+    ///
+    /// `out` must be exactly `T::fixed_len() * LENGTH` bytes long.
+    pub fn encode_ssz_fixed_into(&self, out: &mut [u8])
+    where
+        T: SszFixedLen + SszEncode + SszElement,
+    {
+        let elem_len = T::fixed_len();
+        let expected = elem_len
+            .checked_mul(LENGTH)
+            .expect("SszVector fixed length overflows usize");
+        debug_assert!(
+            out.len() == expected,
+            "fixed-size SszVector encode expects {} bytes, got {}",
+            expected,
+            out.len()
+        );
+        for (idx, item) in self.data.iter().enumerate() {
+            let offset = idx * elem_len;
+            unsafe { item.write_fixed_ssz(out.as_mut_ptr().add(offset)) };
+        }
     }
 
     /// Validates vector byte layout before calling raw [`SszDecode`].
@@ -198,10 +269,22 @@ impl<T, const LIMIT: usize> SszList<T, LIMIT> {
         &self.data
     }
 
+    /// Returns the backing elements as a mutable slice.
+    #[inline]
+    pub fn as_mut_slice(&mut self) -> &mut [T] {
+        &mut self.data
+    }
+
     /// Iterates over elements in SSZ order.
     #[inline]
     pub fn iter(&self) -> core::slice::Iter<'_, T> {
         self.data.iter()
+    }
+
+    /// Iterates mutably over elements in SSZ order.
+    #[inline]
+    pub fn iter_mut(&mut self) -> core::slice::IterMut<'_, T> {
+        self.data.iter_mut()
     }
 
     /// Returns the current element count.
@@ -220,6 +303,70 @@ impl<T, const LIMIT: usize> SszList<T, LIMIT> {
     #[inline]
     pub fn into_inner(self) -> Vec<T> {
         self.data
+    }
+
+    /// Returns the element at `index`, if present.
+    #[inline]
+    pub fn get(&self, index: usize) -> Option<&T> {
+        self.data.get(index)
+    }
+
+    /// Returns the element at `index` mutably, if present.
+    #[inline]
+    pub fn get_mut(&mut self, index: usize) -> Option<&mut T> {
+        self.data.get_mut(index)
+    }
+
+    /// Returns the first element, if present.
+    #[inline]
+    pub fn first(&self) -> Option<&T> {
+        self.data.first()
+    }
+
+    /// Returns the first element mutably, if present.
+    #[inline]
+    pub fn first_mut(&mut self) -> Option<&mut T> {
+        self.data.first_mut()
+    }
+
+    /// Returns the last element, if present.
+    #[inline]
+    pub fn last(&self) -> Option<&T> {
+        self.data.last()
+    }
+
+    /// Returns the last element mutably, if present.
+    #[inline]
+    pub fn last_mut(&mut self) -> Option<&mut T> {
+        self.data.last_mut()
+    }
+
+    /// Appends an element when doing so stays within `LIMIT`.
+    #[inline]
+    pub fn push(&mut self, value: T) -> Result<(), String> {
+        if self.data.len() == LIMIT {
+            return Err(format!("SszList length {} exceeds limit {}", LIMIT + 1, LIMIT));
+        }
+        self.data.push(value);
+        Ok(())
+    }
+
+    /// Removes and returns the last element, if present.
+    #[inline]
+    pub fn pop(&mut self) -> Option<T> {
+        self.data.pop()
+    }
+
+    /// Truncates the list to `len` elements.
+    #[inline]
+    pub fn truncate(&mut self, len: usize) {
+        self.data.truncate(len);
+    }
+
+    /// Removes all elements from the list.
+    #[inline]
+    pub fn clear(&mut self) {
+        self.data.clear();
     }
 
     /// Validates list byte layout and limit checks before decoding elements.
@@ -798,5 +945,50 @@ mod tests {
             vector.encode_ssz_checked().unwrap_err(),
             "BitVector has non-zero unused bits"
         );
+    }
+
+    #[test]
+    fn fixed_vector_fixed_encode_matches_vec_encode() {
+        let vector = SszVector::<u64, 2>::new(vec![1, 2]).unwrap();
+
+        let mut out = [0u8; 16];
+        vector.encode_ssz_fixed_into(&mut out);
+
+        assert_eq!(out.as_slice(), vector.encode_ssz().as_slice());
+    }
+
+    #[test]
+    fn vector_mut_access_preserves_length_invariant() {
+        let mut vector = SszVector::<u64, 2>::new(vec![1, 2]).unwrap();
+        vector.as_mut_slice()[0] = 9;
+        *vector.get_mut(1).unwrap() = 7;
+
+        assert_eq!(vector.as_slice(), &[9, 7]);
+        assert_eq!(vector.len(), 2);
+    }
+
+    #[test]
+    fn list_push_respects_limit() {
+        let mut list = SszList::<u64, 2>::new(vec![1]).unwrap();
+        list.push(2).unwrap();
+
+        assert_eq!(list.as_slice(), &[1, 2]);
+        assert_eq!(
+            list.push(3).unwrap_err(),
+            "SszList length 3 exceeds limit 2"
+        );
+    }
+
+    #[test]
+    fn list_mutators_update_contents_without_exposing_backing_vec() {
+        let mut list = SszList::<u64, 4>::new(vec![1, 2, 3]).unwrap();
+        *list.first_mut().unwrap() = 10;
+        *list.last_mut().unwrap() = 30;
+        list.truncate(2);
+        list.push(40).unwrap();
+        assert_eq!(list.pop(), Some(40));
+        list.clear();
+
+        assert!(list.is_empty());
     }
 }

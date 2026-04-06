@@ -152,7 +152,7 @@ The tables below use the median point estimate from the latest local Criterion r
 | `[u8; 32]` | `17.942 ns` | `19.635 ns` | `20.415 ns` | `820.09 ns` | `1.09x faster` | `1.14x faster` | `45.71x faster` |
 | `Vec<u64> (1K)` | `105.22 ns` | `116.18 ns` | `426.44 ns` | `22.484 us` | `1.10x faster` | `4.05x faster` | `213.69x faster` |
 | `Vec<u64> (100K)` | `11.045 us` | `12.394 us` | `55.006 us` | `2.2138 ms` | `1.12x faster` | `4.98x faster` | `200.43x faster` |
-| `BeaconBlockHeader` | `21.878 ns` | `25.406 ns` | `153.93 ns` | `2.991 us` | `1.16x faster` | `7.04x faster` | `136.71x faster` |
+| `BeaconBlockHeader` | `12.362 ns` | `20.030 ns` | `145.18 ns` | `2.6146 us` | `1.62x faster` | `11.74x faster` | `211.50x faster` |
 
 ### Decode
 
