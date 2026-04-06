@@ -57,6 +57,30 @@ pub trait SszEncode {
     }
 }
 
+/// Fixed-size SSZ encoding into caller-provided storage.
+///
+/// This is the no-allocation path for types whose encoded length is known
+/// statically. Callers provide the destination slice and the implementation
+/// writes the fixed-size SSZ bytes directly into it.
+pub trait SszEncodeFixed: SszEncode + SszFixedLen {
+    /// Encodes the fixed-size SSZ bytes into `out`.
+    ///
+    /// `out` must be exactly [`SszFixedLen::fixed_len`] bytes long.
+    #[inline]
+    fn encode_ssz_fixed_into(&self, out: &mut [u8]) {
+        let expected = Self::fixed_len();
+        debug_assert!(
+            out.len() == expected,
+            "fixed-size SSZ encode expects {} bytes, got {}",
+            expected,
+            out.len()
+        );
+        unsafe { self.write_fixed_ssz(out.as_mut_ptr()) };
+    }
+}
+
+impl<T> SszEncodeFixed for T where T: SszEncode + SszFixedLen {}
+
 /// Decodes a value from SSZ bytes.
 ///
 /// Most callers should prefer a checked constructor on container/list wrappers

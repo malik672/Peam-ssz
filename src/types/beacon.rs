@@ -1,4 +1,4 @@
-use crate::ssz::{HashTreeRoot, SszDecode, SszEncode, SszFixedLen};
+use crate::ssz::{HashTreeRoot, SszDecode, SszEncode, SszEncodeFixed, SszFixedLen};
 use crate::types::bytes::Bytes32;
 use crate::types::container::{Container, hash_tree_root_from_field_roots};
 
@@ -19,8 +19,23 @@ pub struct BeaconBlockHeader {
 
 impl Container for BeaconBlockHeader {}
 
+impl BeaconBlockHeader {
+    /// Encodes the fixed-size header into a stack-allocated array.
+    #[inline]
+    pub fn encode_ssz_array(&self) -> [u8; 112] {
+        let mut out = [0u8; 112];
+        self.encode_ssz_fixed_into(&mut out);
+        out
+    }
+}
+
 impl SszEncode for BeaconBlockHeader {
     /// Encodes the header as a 112-byte fixed-layout SSZ container.
+    ///
+    /// This convenience path still allocates because it returns an owned
+    /// `Vec<u8>`. Use [`BeaconBlockHeader::encode_ssz_array`] or
+    /// [`crate::ssz::SszEncodeFixed::encode_ssz_fixed_into`] when the caller
+    /// wants the fixed-size no-allocation form.
     fn encode_ssz(&self) -> Vec<u8> {
         let mut out = Vec::with_capacity(112);
         self.encode_ssz_into(&mut out);
@@ -127,6 +142,22 @@ mod tests {
 
         let decoded = BeaconBlockHeader::decode_ssz(&bytes).unwrap();
         assert_eq!(decoded, header);
+    }
+
+    #[test]
+    fn beacon_block_header_fixed_encode_matches_vec_encode() {
+        let header = BeaconBlockHeader {
+            slot: 42,
+            proposer_index: 7,
+            parent_root: Bytes32::from([1u8; 32]),
+            state_root: Bytes32::from([2u8; 32]),
+            body_root: Bytes32::from([3u8; 32]),
+        };
+
+        let array = header.encode_ssz_array();
+        let bytes = header.encode_ssz();
+
+        assert_eq!(array.as_slice(), bytes.as_slice());
     }
 
     #[test]
