@@ -31,19 +31,22 @@ if [[ -z "$package_name" || -z "$package_version" ]]; then
   exit 1
 fi
 
-crate_url="https://crates.io/api/v1/crates/${package_name}/${package_version}"
-http_code="$(curl -sS -o /tmp/peam-ssz-crate-check.json -w '%{http_code}' "$crate_url")"
+echo "Publishing ${package_name} ${package_version} if it is not already on crates.io"
 
-if [[ "$http_code" == "200" ]]; then
-  echo "${package_name} ${package_version} is already published; skipping."
+publish_log="$(mktemp)"
+if cargo publish --locked --manifest-path "$manifest_path" --token "$CARGO_REGISTRY_TOKEN" \
+  >"$publish_log" 2>&1; then
+  cat "$publish_log"
+  rm -f "$publish_log"
   exit 0
 fi
 
-if [[ "$http_code" != "404" ]]; then
-  echo "Unexpected crates.io response while checking ${package_name} ${package_version}: HTTP ${http_code}" >&2
-  cat /tmp/peam-ssz-crate-check.json >&2 || true
-  exit 1
+cat "$publish_log" >&2
+if grep -Eqi "already (uploaded|exists)|previously published|already been uploaded" "$publish_log"; then
+  echo "${package_name} ${package_version} is already published; skipping."
+  rm -f "$publish_log"
+  exit 0
 fi
 
-echo "Publishing ${package_name} ${package_version}"
-cargo publish --manifest-path "$manifest_path" --token "$CARGO_REGISTRY_TOKEN"
+rm -f "$publish_log"
+exit 1
