@@ -31,10 +31,36 @@ if [[ -z "$package_name" || -z "$package_version" ]]; then
   exit 1
 fi
 
+publish_root="$(mktemp -d)"
+trap 'rm -rf "$publish_root"' EXIT
+
+rsync -a \
+  --exclude '.git' \
+  --exclude 'target' \
+  --exclude 'spec-tests' \
+  "$repo_root/" "$publish_root/"
+
+publish_manifest="$publish_root/Cargo.toml"
+awk '
+  skip_section == 1 {
+    if ($0 ~ /^\[/) {
+      skip_section = 0
+    } else {
+      next
+    }
+  }
+  $0 ~ /^\[workspace\]$/ || $0 ~ /^\[dev-dependencies\]$/ || $0 ~ /^\[\[bench\]\]$/ {
+    skip_section = 1
+    next
+  }
+  { print }
+' "$manifest_path" > "${publish_manifest}.tmp"
+mv "${publish_manifest}.tmp" "$publish_manifest"
+
 echo "Publishing ${package_name} ${package_version} if it is not already on crates.io"
 
 publish_log="$(mktemp)"
-if cargo publish --locked --manifest-path "$manifest_path" --token "$CARGO_REGISTRY_TOKEN" \
+if cargo publish --manifest-path "$publish_manifest" --token "$CARGO_REGISTRY_TOKEN" \
   >"$publish_log" 2>&1; then
   cat "$publish_log"
   rm -f "$publish_log"
