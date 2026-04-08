@@ -1,4 +1,4 @@
-use crate::ssz::hash::{chunkify_fixed, merkleize_with_limit};
+use crate::ssz::hash::{chunkify_fixed, hash_nodes, merkleize};
 use crate::ssz::{HashTreeRoot, SszDecode, SszEncode, SszFixedLen};
 use crate::types::bytes::Bytes32;
 
@@ -149,9 +149,28 @@ impl<const N: usize> SszDecode for [u8; N] {
 impl<const N: usize> HashTreeRoot for [u8; N] {
     #[inline]
     fn hash_tree_root(&self) -> [u8; 32] {
+        if N == 0 {
+            return Bytes32::zero().as_array();
+        }
+
+        if N <= 32 {
+            let mut chunk = [0u8; 32];
+            chunk[..N].copy_from_slice(self);
+            return chunk;
+        }
+
+        if N <= 64 {
+            let mut left = [0u8; 32];
+            left.copy_from_slice(&self[..32]);
+
+            let mut right = [0u8; 32];
+            right[..N - 32].copy_from_slice(&self[32..]);
+
+            return hash_nodes(&Bytes32::from(left), &Bytes32::from(right)).as_array();
+        }
+
         let chunks = chunkify_fixed(self);
-        let root = merkleize_with_limit(&chunks, chunks.len()).unwrap_or_else(|_| Bytes32::zero());
-        *root.as_ref()
+        *merkleize(&chunks).as_ref()
     }
 }
 

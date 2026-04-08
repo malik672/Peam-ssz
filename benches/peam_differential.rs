@@ -10,14 +10,128 @@ use criterion::{black_box, criterion_group, criterion_main, BenchmarkId, Criteri
 use fixtures::{make_header, make_nested_vec_u64, make_vec_u64, pre_encode, BeaconBlockHeader};
 use libssz::{SszDecode as LibSszDecode, SszEncode as LibSszEncode};
 use libssz_merkle::HashTreeRoot as LibHashTreeRoot;
+use peam_ssz::ssz::hash::{hash_nodes, merkleize_unsafe};
 use peam_ssz::ssz::{
     HashTreeRoot as PeamHashTreeRoot, SszDecode as PeamSszDecode, SszEncode as PeamSszEncode,
 };
 use peam_ssz::types::beacon::BeaconBlockHeader as PeamBeaconBlockHeader;
+use peam_ssz::types::bytes::Bytes32;
 use peam_ssz::types::bytes::Bytes32 as PeamBytes32;
 use peam_ssz::types::collections::SszList as PeamList;
+use std::sync::OnceLock;
 
 const PEAM_VEC_LIMIT: usize = 100_000;
+
+fn merkleize_old(chunks: &[Bytes32]) -> Bytes32 {
+    let limit = chunks.len();
+
+    if limit == 0 {
+        return Bytes32::zero();
+    }
+
+    let mut width = 1usize;
+    while width < limit {
+        width <<= 1;
+    }
+
+    if width == 1 {
+        return chunks[0];
+    }
+
+    let mut level: Vec<Bytes32> = chunks.to_vec();
+    let mut subtree_size = 1usize;
+
+    while subtree_size < width {
+        let next_len = level.len().div_ceil(2);
+        let mut next = vec![Bytes32::zero(); next_len];
+        let mut i = 0usize;
+        let mut out_idx = 0usize;
+        while i < level.len() {
+            let left = &level[i];
+            i += 1;
+            let right = if i < level.len() {
+                let r = &level[i];
+                i += 1;
+                r
+            } else {
+                &bench_zero_tree_root(subtree_size)
+            };
+            next[out_idx] = hash_nodes(left, right);
+            out_idx += 1;
+        }
+        level = next;
+        subtree_size <<= 1;
+    }
+
+    level[0]
+}
+
+fn merkleize_new(chunks: &[Bytes32]) -> Bytes32 {
+    let limit = chunks.len();
+
+    if limit == 0 {
+        return Bytes32::zero();
+    }
+
+    let mut width = 1usize;
+    while width < limit {
+        width <<= 1;
+    }
+
+    if width == 1 {
+        return chunks[0];
+    }
+
+    let mut level: Vec<Bytes32> = chunks.to_vec();
+    let mut subtree_size = 1usize;
+
+    while subtree_size < width {
+        let next_len = level.len().div_ceil(2);
+        let mut next = vec![Bytes32::zero(); next_len];
+        let mut i = 0usize;
+        let mut out_idx = 0usize;
+        while i + 1 < level.len() {
+            next[out_idx] = hash_nodes(&level[i], &level[i + 1]);
+            i += 2;
+            out_idx += 1;
+        }
+        if i != level.len() {
+            next[out_idx] = hash_nodes(&level[i], &bench_zero_tree_root(subtree_size));
+        }
+        level = next;
+        subtree_size <<= 1;
+    }
+
+    level[0]
+}
+
+fn bench_zero_tree_root(width: usize) -> Bytes32 {
+    static ZERO_HASHES: OnceLock<Vec<Bytes32>> = OnceLock::new();
+
+    let zero_hashes = ZERO_HASHES.get_or_init(|| {
+        let mut hashes = Vec::with_capacity(64);
+        hashes.push(Bytes32::zero());
+        for idx in 1..64 {
+            let prev = hashes[idx - 1];
+            hashes.push(hash_nodes(&prev, &prev));
+        }
+        hashes
+    });
+
+    let depth = width.trailing_zeros() as usize;
+    zero_hashes[depth]
+}
+
+fn make_chunks(n: usize) -> Vec<Bytes32> {
+    (0..n)
+        .map(|i| {
+            let mut bytes = [0u8; 32];
+            bytes[..8].copy_from_slice(&(i as u64).to_le_bytes());
+            bytes[8..16].copy_from_slice(&(i as u64).wrapping_mul(0x9E37_79B9).to_le_bytes());
+            Bytes32::from(bytes)
+        })
+        .collect()
+}
 
 /// Converts the shared benchmark fixture into the real `peam-ssz` header type.
 fn peam_header_from_fixture(value: &BeaconBlockHeader) -> PeamBeaconBlockHeader {
@@ -426,6 +540,25 @@ fn diff_peam_htr_vec_u64(c: &mut Criterion) {
     group.finish();
 }
 
+/// Compares the old branchy inner Merkle loop against the hoisted-tail version.
+fn diff_peam_merkleize_internal(c: &mut Criterion) {
+    let mut group = c.benchmark_group("diff_peam/hash_internal/merkleize");
+    for &size in &[3usize, 5, 31, 32, 33, 255, 256, 257, 1023, 1024, 1025] {
+        let chunks = make_chunks(size);
+        group.throughput(Throughput::Elements(size as u64));
+        group.bench_with_input(BenchmarkId::new("old", size), &chunks, |b, chunks| {
+            b.iter(|| merkleize_old(black_box(chunks)));
+        });
+        group.bench_with_input(BenchmarkId::new("new", size), &chunks, |b, chunks| {
+            b.iter(|| merkleize_new(black_box(chunks)));
+        });
+        group.bench_with_input(BenchmarkId::new("crate", size), &chunks, |b, chunks| {
+            b.iter(|| merkleize_unsafe(black_box(chunks)));
+        });
+    }
+    group.finish();
+}
+
 criterion_group!(
     benches,
     diff_peam_encode_primitives,
@@ -440,5 +573,6 @@ criterion_group!(
     diff_peam_decode_header,
     diff_peam_htr,
     diff_peam_htr_vec_u64,
+    diff_peam_merkleize_internal,
 );
 criterion_main!(benches);

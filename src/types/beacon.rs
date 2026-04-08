@@ -1,6 +1,7 @@
+use crate::ssz::hash::merkleize_tree_root;
 use crate::ssz::{HashTreeRoot, SszDecode, SszEncode, SszEncodeFixed, SszFixedLen};
 use crate::types::bytes::Bytes32;
-use crate::types::container::{Container, hash_tree_root_from_field_roots};
+use crate::types::container::Container;
 
 /// Minimal fixed-layout beacon block header used for benchmark and fixture parity work.
 #[derive(Clone, Debug, Eq, PartialEq)]
@@ -107,13 +108,14 @@ impl SszDecode for BeaconBlockHeader {
 impl HashTreeRoot for BeaconBlockHeader {
     /// Computes the container root from the five field roots.
     fn hash_tree_root(&self) -> [u8; 32] {
-        hash_tree_root_from_field_roots(&[
-            self.slot.hash_tree_root(),
-            self.proposer_index.hash_tree_root(),
-            self.parent_root.hash_tree_root(),
-            self.state_root.hash_tree_root(),
-            self.body_root.hash_tree_root(),
-        ])
+        let chunks = [
+            Bytes32::from(self.slot.hash_tree_root()),
+            Bytes32::from(self.proposer_index.hash_tree_root()),
+            Bytes32::from(self.parent_root.hash_tree_root()),
+            Bytes32::from(self.state_root.hash_tree_root()),
+            Bytes32::from(self.body_root.hash_tree_root()),
+        ];
+        *merkleize_tree_root(&chunks).as_ref()
     }
 }
 

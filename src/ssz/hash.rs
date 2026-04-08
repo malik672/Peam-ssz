@@ -101,18 +101,22 @@ pub fn merkleize_unsafe(chunks: &[Bytes32]) -> Bytes32 {
         unsafe { next.set_len(next_len) };
         let mut i = 0usize;
         let mut out_idx = 0usize;
-        while i < level.len() {
+        while i + 1 < level.len() {
             let left = &level[i];
-            i += 1;
-            let right = if i < level.len() {
-                let r = &level[i];
-                i += 1;
-                r
-            } else {
-                &zero_tree_root_no_check(subtree_size)
-            };
+            let right = &level[i + 1];
             unsafe { write_at(&mut next, out_idx, hash_nodes(left, right)) };
+            i += 2;
             out_idx += 1;
+        }
+        if i != level.len() {
+            let left = &level[i];
+            unsafe {
+                write_at(
+                    &mut next,
+                    out_idx,
+                    hash_nodes(left, &zero_tree_root_no_check(subtree_size)),
+                )
+            };
         }
         level = next;
         subtree_size <<= 1;
@@ -218,24 +222,23 @@ pub fn merkleize_with_limit(chunks: &[Bytes32], limit: usize) -> Result<Bytes32,
         unsafe { next.set_len(next_len) };
         let mut i = 0usize;
         let mut out_idx = 0usize;
-        while i < level.len() {
+        while i + 1 < level.len() {
             let left = &level[i];
             unsafe {
-                i = i.unchecked_add(1);
-            }
-            let right = if i < level.len() {
-                let r: &Bytes32 = &level[i];
-                unsafe {
-                    i = i.unchecked_add(1);
-                }
-                r
-            } else {
-                &zero_tree_root_no_check(subtree_size)
-            };
-            unsafe {
-                write_at(&mut next, out_idx, hash_nodes(left, right));
+                write_at(&mut next, out_idx, hash_nodes(left, &level[i + 1]));
                 // safety: level.len() is bound by usize::MAX and based on the iteration pattern, out_idx will always be less than next_len.
                 out_idx = out_idx.unchecked_add(1);
+                i = i.unchecked_add(2);
+            };
+        }
+        if i != level.len() {
+            let left = &level[i];
+            unsafe {
+                write_at(
+                    &mut next,
+                    out_idx,
+                    hash_nodes(left, &zero_tree_root_no_check(subtree_size)),
+                );
             };
         }
         level = next;

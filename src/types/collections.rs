@@ -351,6 +351,36 @@ impl<T, const LIMIT: usize> SszList<T, LIMIT> {
         Ok(())
     }
 
+    /// Appends `additional` copies of `value` while preserving the list limit.
+    ///
+    /// This is a fast path for callers that need bulk growth with a repeated
+    /// `Copy` value, such as zero-filling fixed-size roots.
+    #[inline]
+    pub fn extend_copy(&mut self, additional: usize, value: T) -> Result<(), String>
+    where
+        T: Copy,
+    {
+        if additional == 0 {
+            return Ok(());
+        }
+        let new_len = self
+            .data
+            .len()
+            .checked_add(additional)
+            .ok_or_else(|| "SszList length overflow".to_string())?;
+        if new_len > LIMIT {
+            return Err(format!("SszList length {} exceeds limit {}", new_len, LIMIT));
+        }
+
+        let start = self.data.len();
+        self.data.reserve(additional);
+        unsafe { self.data.set_len(new_len) };
+        for idx in 0..additional {
+            unsafe { write_at(&mut self.data, start + idx, value) };
+        }
+        Ok(())
+    }
+
     /// Removes and returns the last element, if present.
     #[inline]
     pub fn pop(&mut self) -> Option<T> {
@@ -990,5 +1020,17 @@ mod tests {
         list.clear();
 
         assert!(list.is_empty());
+    }
+
+    #[test]
+    fn list_extend_copy_respects_limit_and_repeats_value() {
+        let mut list = SszList::<u64, 4>::new(vec![1]).unwrap();
+        list.extend_copy(2, 9).unwrap();
+        assert_eq!(list.as_slice(), &[1, 9, 9]);
+
+        assert_eq!(
+            list.extend_copy(2, 7).unwrap_err(),
+            "SszList length 5 exceeds limit 4"
+        );
     }
 }

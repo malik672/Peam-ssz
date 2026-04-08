@@ -283,6 +283,7 @@ impl ProgressiveBitlist {
         out
     }
 
+    #[inline]
     fn unpack_bits_with_terminator(bytes: &[u8]) -> Result<(Vec<u8>, usize), String> {
         let last_byte = *bytes.last().unwrap_or(&0);
         if last_byte == 0 {
@@ -311,6 +312,7 @@ impl SszEncode for ProgressiveBitlist {
         self.pack_bits_with_terminator()
     }
 
+    #[inline]
     fn encode_ssz_into(&self, out: &mut Vec<u8>) {
         let start = out.len();
         let bytes = (self.len + 1).div_ceil(8);
