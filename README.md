@@ -169,17 +169,17 @@ The tables below use the median point estimate from the latest local Criterion r
 
 | Type | peam-ssz | libssz | Lighthouse | ssz_rs | Peam vs libssz | Peam vs Lighthouse | Peam vs ssz_rs |
 | --- | ---: | ---: | ---: | ---: | --- | --- | --- |
-| `bool` | `3.0662 ns` | `3.0469 ns` | `8.5619 ns` | `4.6362 ns` | `~1.00x` | `2.79x faster` | `1.51x faster` |
-| `u64` | `3.0665 ns` | `3.4293 ns` | `3.7429 ns` | `48.848 ns` | `1.12x faster` | `1.22x faster` | `15.93x faster` |
-| `[u8; 32]` | `3.6087 ns` | `3.6437 ns` | `5.3615 ns` | `112.56 ns` | `~1.00x` | `1.49x faster` | `31.19x faster` |
-| `Vec<u64> (1K)` | `69.419 us` | `70.126 us` | `n/a` | `72.868 us` | `~1.00x` | `n/a` | `1.05x faster` |
-| `Vec<u64> (100K)` | `6.6561 ms` | `9.0167 ms` | `n/a` | `7.0884 ms` | `1.35x faster` | `n/a` | `1.06x faster` |
+| `bool` | `3.2367 ns` | `3.0469 ns` | `8.5619 ns` | `4.6362 ns` | `1.06x slower` | `2.65x faster` | `1.43x faster` |
+| `u64` | `3.0904 ns` | `3.4293 ns` | `3.7429 ns` | `48.848 ns` | `1.11x faster` | `1.21x faster` | `15.81x faster` |
+| `[u8; 32]` | `3.5525 ns` | `3.6437 ns` | `5.3615 ns` | `112.56 ns` | `1.03x faster` | `1.51x faster` | `31.68x faster` |
+| `Vec<u64> (1K)` | `13.213 us` | `70.126 us` | `n/a` | `72.868 us` | `5.31x faster` | `n/a` | `5.51x faster` |
+| `Vec<u64> (100K)` | `1.2079 ms` | `9.0167 ms` | `n/a` | `7.0884 ms` | `7.46x faster` | `n/a` | `5.87x faster` |
 
 Peam-only header HTR measurement in the current harness:
 
 | Type | peam-ssz |
 | --- | ---: |
-| `BeaconBlockHeader` | `1.6298 us` |
+| `BeaconBlockHeader` | `251.27 ns` |
 
 ## Notes
 
