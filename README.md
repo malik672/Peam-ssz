@@ -12,6 +12,10 @@ The goal here is simple:
 
 Right now the crate depends on `sha2` and otherwise keeps the core implementation local.
 
+As a published library, `peam-ssz` intentionally does not enable `sha2`'s `asm`
+feature by default. Downstream applications that want architecture-specific SHA
+backends can opt into them in their own dependency graph.
+
 ## Project Links
 
 - Crate: [crates.io/crates/peam-ssz](https://crates.io/crates/peam-ssz)
@@ -169,18 +173,20 @@ The tables below use the median point estimate from the latest local Criterion r
 
 | Type | peam-ssz | libssz | Lighthouse | ssz_rs | Peam vs libssz | Peam vs Lighthouse | Peam vs ssz_rs |
 | --- | ---: | ---: | ---: | ---: | --- | --- | --- |
-| `bool` | `3.2367 ns` | `3.0469 ns` | `8.5619 ns` | `4.6362 ns` | `1.06x slower` | `2.65x faster` | `1.43x faster` |
-| `u64` | `3.0904 ns` | `3.4293 ns` | `3.7429 ns` | `48.848 ns` | `1.11x faster` | `1.21x faster` | `15.81x faster` |
-| `[u8; 32]` | `3.5525 ns` | `3.6437 ns` | `5.3615 ns` | `112.56 ns` | `1.03x faster` | `1.51x faster` | `31.68x faster` |
-| `Vec<u64> (1K)` | `13.213 us` | `70.126 us` | `n/a` | `72.868 us` | `5.31x faster` | `n/a` | `5.51x faster` |
-| `Vec<u64> (100K)` | `1.2079 ms` | `9.0167 ms` | `n/a` | `7.0884 ms` | `7.46x faster` | `n/a` | `5.87x faster` |
+| `bool` | `3.2138 ns` | `3.0469 ns` | `8.5619 ns` | `4.6362 ns` | `1.05x slower` | `2.66x faster` | `1.44x faster` |
+| `u64` | `3.1461 ns` | `3.4293 ns` | `3.7429 ns` | `48.848 ns` | `1.09x faster` | `1.19x faster` | `15.53x faster` |
+| `[u8; 32]` | `3.5662 ns` | `3.6437 ns` | `5.3615 ns` | `112.56 ns` | `1.02x faster` | `1.50x faster` | `31.56x faster` |
+| `Vec<u64> (1K)` | `71.459 us` | `70.126 us` | `n/a` | `72.868 us` | `1.02x slower` | `n/a` | `1.02x faster` |
+| `Vec<u64> (100K)` | `6.7942 ms` | `9.0167 ms` | `n/a` | `7.0884 ms` | `1.33x faster` | `n/a` | `1.04x faster` |
 
 Peam-only header HTR measurement in the current harness:
 
 | Type | peam-ssz |
 | --- | ---: |
-| `BeaconBlockHeader` | `251.27 ns` |
+| `BeaconBlockHeader` | `1.6588 us` |
 
 ## Notes
 
 - The current benchmark harness is intentionally narrow: primitives, fixed bytes, `Vec<u64>`, and a `BeaconBlockHeader`-shaped container.
+- The crate enables `sha2`'s `compress` API, but leaves `sha2/asm` as an
+  application-level choice for downstream users.
