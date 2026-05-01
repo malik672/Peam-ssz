@@ -11,7 +11,7 @@ fn hash_nodes(left: &[u8; 32], right: &[u8; 32]) -> [u8; 32] {
     hasher.update(right);
     let out = hasher.finalize();
     let mut bytes = [0u8; 32];
-    bytes.copy_from_slice(&out);
+    bytes.copy_from_slice(out.as_ref());
     bytes
 }
 

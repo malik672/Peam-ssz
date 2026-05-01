@@ -2,7 +2,10 @@
 //!
 //! This module provides the low-level encode/decode/root building blocks used
 //! by fixed-layout and mixed fixed/variable containers.
-use crate::ssz::hash::{hash_nodes, merkleize_progressive, merkleize_with_limit, pack_bytes};
+use crate::ssz::hash::{
+    hash_nodes, merkleize_progressive, merkleize_tree_root_3, merkleize_tree_root_4,
+    merkleize_unsafe, pack_bytes,
+};
 use crate::types::bytes::Bytes32;
 
 /// Encoded representation of a single container field.
@@ -162,7 +165,11 @@ pub fn decode_field_slices<'a>(
 /// Merkleizes a container from its already-computed field roots.
 pub fn hash_tree_root_from_field_roots(field_roots: &[[u8; 32]]) -> [u8; 32] {
     let chunks: Vec<Bytes32> = field_roots.iter().copied().map(Bytes32::from).collect();
-    let root = merkleize_with_limit(&chunks, chunks.len()).unwrap_or_else(|_| Bytes32::zero());
+    let root = match chunks.len() {
+        3 => merkleize_tree_root_3(&chunks),
+        4 => merkleize_tree_root_4(&chunks),
+        _ => merkleize_unsafe(&chunks),
+    };
     *root.as_ref()
 }
 
@@ -177,7 +184,7 @@ pub fn hash_tree_root_progressive_container(
         if active {
             chunks[chunk_idx] = Bytes32::from(field_roots[field_idx]);
             field_idx += 1;
-         }
+        }
     }
     assert_eq!(field_idx, field_roots.len());
 

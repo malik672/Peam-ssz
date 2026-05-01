@@ -141,45 +141,45 @@ cd peam-ssz
 cargo bench --bench peam_differential
 ```
 
-The tables below use the median point estimate from the latest local Criterion run on a M3 air.
+The tables below use the median point estimate from the latest local Criterion runs on an M3 Air. For noisier hot-path targets, focused reruns are preferred over one giant all-in bench sweep.
 
 ### Encode
 
 | Type | peam-ssz | libssz | Lighthouse | ssz_rs | Peam vs libssz | Peam vs Lighthouse | Peam vs ssz_rs |
 | --- | ---: | ---: | ---: | ---: | --- | --- | --- |
-| `bool` | `15.375 ns` | `16.974 ns` | `19.645 ns` | `19.377 ns` | `1.10x faster` | `1.28x faster` | `1.26x faster` |
-| `u64` | `15.379 ns` | `15.406 ns` | `18.046 ns` | `18.285 ns` | `~1.00x` | `1.17x faster` | `1.19x faster` |
-| `[u8; 32]` | `17.942 ns` | `19.635 ns` | `20.415 ns` | `820.09 ns` | `1.09x faster` | `1.14x faster` | `45.71x faster` |
-| `Vec<u64> (1K)` | `105.22 ns` | `116.18 ns` | `426.44 ns` | `22.484 us` | `1.10x faster` | `4.05x faster` | `213.69x faster` |
-| `Vec<u64> (100K)` | `11.045 us` | `12.394 us` | `55.006 us` | `2.2138 ms` | `1.12x faster` | `4.98x faster` | `200.43x faster` |
-| `BeaconBlockHeader` | `12.362 ns` | `20.030 ns` | `145.18 ns` | `2.6146 us` | `1.62x faster` | `11.74x faster` | `211.50x faster` |
+| `bool` | `11.521 ns` | `11.449 ns` | `19.996 ns` | `14.300 ns` | `~1.00x` | `1.74x faster` | `1.24x faster` |
+| `u64` | `11.458 ns` | `11.446 ns` | `15.421 ns` | `16.201 ns` | `~1.00x` | `1.35x faster` | `1.41x faster` |
+| `[u8; 32]` | `14.133 ns` | `14.105 ns` | `17.931 ns` | `704.08 ns` | `~1.00x` | `1.27x faster` | `49.82x faster` |
+| `Vec<u64> (1K)` | `111.58 ns` | `119.12 ns` | `434.87 ns` | `19.226 us` | `1.07x faster` | `3.90x faster` | `172.31x faster` |
+| `Vec<u64> (100K)` | `42.983 us` | `42.794 us` | `84.693 us` | `2.1747 ms` | `~1.00x` | `1.97x faster` | `50.59x faster` |
+| `BeaconBlockHeader` | `14.060 ns` | `13.965 ns` | `108.12 ns` | `1.9966 us` | `~1.00x` | `7.69x faster` | `142.01x faster` |
 
 ### Decode
 
 | Type | peam-ssz | libssz | Lighthouse | ssz_rs | Peam vs libssz | Peam vs Lighthouse | Peam vs ssz_rs |
 | --- | ---: | ---: | ---: | ---: | --- | --- | --- |
-| `bool` | `540.87 ps` | `559.26 ps` | `827.57 ps` | `557.68 ps` | `1.03x faster` | `1.53x faster` | `1.03x faster` |
-| `u64` | `446.70 ps` | `451.08 ps` | `450.20 ps` | `472.91 ps` | `~1.00x` | `~1.00x` | `1.06x faster` |
-| `[u8; 32]` | `4.0330 ns` | `4.3548 ns` | `4.1102 ns` | `78.057 ns` | `1.08x faster` | `1.02x faster` | `19.35x faster` |
-| `Vec<u64> (1K)` | `106.25 ns` | `113.45 ns` | `1.2193 us` | `762.90 ns` | `1.07x faster` | `11.48x faster` | `7.18x faster` |
-| `Vec<u64> (100K)` | `10.108 us` | `12.117 us` | `162.24 us` | `129.38 us` | `1.20x faster` | `16.05x faster` | `12.80x faster` |
-| `BeaconBlockHeader` | `32.020 ns` | `65.699 ns` | `39.000 ns` | `2.187 us` | `2.05x faster` | `1.22x faster` | `68.30x faster` |
+| `bool` | `540.44 ps` | `555.95 ps` | `831.54 ps` | `560.36 ps` | `1.03x faster` | `1.54x faster` | `1.04x faster` |
+| `u64` | `452.78 ps` | `839.69 ps` | `539.19 ps` | `1.0824 ns` | `1.85x faster` | `1.19x faster` | `2.39x faster` |
+| `[u8; 32]` | `3.7709 ns` | `4.0700 ns` | `3.8532 ns` | `91.437 ns` | `1.08x faster` | `1.02x faster` | `24.25x faster` |
+| `Vec<u64> (1K)` | `118.27 ns` | `121.05 ns` | `1.1793 us` | `1.4868 us` | `1.02x faster` | `9.97x faster` | `12.57x faster` |
+| `Vec<u64> (100K)` | `38.508 us` | `37.104 us` | `195.59 us` | `160.96 us` | `1.04x slower` | `5.08x faster` | `4.18x faster` |
+| `BeaconBlockHeader` | `12.566 ns` | `14.374 ns` | `12.041 ns` | `279.25 ns` | `1.14x faster` | `1.04x slower` | `22.22x faster` |
 
 ### Hash Tree Root
 
 | Type | peam-ssz | libssz | Lighthouse | ssz_rs | Peam vs libssz | Peam vs Lighthouse | Peam vs ssz_rs |
 | --- | ---: | ---: | ---: | ---: | --- | --- | --- |
-| `bool` | `3.0366 ns` | `3.0363 ns` | `3.1981 ns` | `3.1296 ns` | `~1.00x` | `1.05x faster` | `1.03x faster` |
-| `u64` | `3.0365 ns` | `3.0397 ns` | `3.1523 ns` | `58.072 ns` | `~1.00x` | `1.04x faster` | `19.12x faster` |
-| `[u8; 32]` | `3.5222 ns` | `3.5403 ns` | `3.5426 ns` | `103.81 ns` | `~1.00x` | `~1.00x` | `29.47x faster` |
-| `Vec<u64> (1K)` | `74.922 us` | `73.807 us` | `n/a` | `75.770 us` | `1.02x slower` | `n/a` | `1.01x faster` |
-| `Vec<u64> (100K)` | `7.138 ms` | `9.319 ms` | `n/a` | `7.394 ms` | `1.31x faster` | `n/a` | `1.04x faster` |
+| `bool` | `3.0662 ns` | `3.0469 ns` | `8.5619 ns` | `4.6362 ns` | `~1.00x` | `2.79x faster` | `1.51x faster` |
+| `u64` | `3.0665 ns` | `3.4293 ns` | `3.7429 ns` | `48.848 ns` | `1.12x faster` | `1.22x faster` | `15.93x faster` |
+| `[u8; 32]` | `3.6087 ns` | `3.6437 ns` | `5.3615 ns` | `112.56 ns` | `~1.00x` | `1.49x faster` | `31.19x faster` |
+| `Vec<u64> (1K)` | `69.419 us` | `70.126 us` | `n/a` | `72.868 us` | `~1.00x` | `n/a` | `1.05x faster` |
+| `Vec<u64> (100K)` | `6.6561 ms` | `9.0167 ms` | `n/a` | `7.0884 ms` | `1.35x faster` | `n/a` | `1.06x faster` |
 
 Peam-only header HTR measurement in the current harness:
 
 | Type | peam-ssz |
 | --- | ---: |
-| `BeaconBlockHeader` | `1.6012 us` |
+| `BeaconBlockHeader` | `1.6298 us` |
 
 ## Notes
 
