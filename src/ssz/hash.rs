@@ -2,7 +2,11 @@
 //!
 //! This module contains the chunking and tree-building primitives used by
 //! containers, collections, bitfields, and progressive types.
-use sha2::{Digest, Sha256};
+use super::SszEncode;
+use sha2::{
+    compress256,
+    digest::generic_array::GenericArray,
+};
 
 use crate::types::bytes::Bytes32;
 use crate::unsafe_vec::write_at;
@@ -12,16 +16,43 @@ include!(concat!(env!("OUT_DIR"), "/zero_hashes.rs"));
 /// Size of a single SSZ Merkle chunk in bytes.
 pub const BYTES_PER_CHUNK: usize = 32;
 
+const SHA256_IV: [u32; 8] = [
+    0x6a09_e667,
+    0xbb67_ae85,
+    0x3c6e_f372,
+    0xa54f_f53a,
+    0x510e_527f,
+    0x9b05_688c,
+    0x1f83_d9ab,
+    0x5be0_cd19,
+];
+
+const SHA256_PAD_BLOCK_512: [u8; 64] = {
+    let mut block = [0u8; 64];
+    block[0] = 0x80;
+    block[62] = 0x02;
+    block[63] = 0x00;
+    block
+};
+
 /// Hashes two already-chunked nodes into their parent Merkle node.
 #[inline]
 pub fn hash_nodes(left: &Bytes32, right: &Bytes32) -> Bytes32 {
-    let mut hasher = Sha256::new();
-    hasher.update(left.as_array());
-    hasher.update(right.as_array());
-    let out = hasher.finalize();
-    // Extract the first 32 bytes and return it as Bytes32.
-    // We can optimize this later with a direct wrap/ptr, if needed.
-    Bytes32::from_slice(&out)
+    let mut state = SHA256_IV;
+
+    let mut first_block = GenericArray::default();
+    first_block[..BYTES_PER_CHUNK].copy_from_slice(&left.as_array());
+    first_block[BYTES_PER_CHUNK..].copy_from_slice(&right.as_array());
+
+    let second_block = GenericArray::from(SHA256_PAD_BLOCK_512);
+    let blocks = [first_block, second_block];
+    compress256(&mut state, &blocks);
+
+    let mut out = [0u8; 32];
+    for (chunk, word) in out.chunks_exact_mut(4).zip(state) {
+        chunk.copy_from_slice(&word.to_be_bytes());
+    }
+    Bytes32::from(out)
 }
 
 /// Splits fixed bytes into 32-byte chunks, zero-padding the tail chunk.
@@ -71,16 +102,30 @@ pub fn merkleize(chunks: &[Bytes32]) -> Bytes32 {
     merkleize_with_limit(chunks, chunks.len()).unwrap()
 }
 
-/// Merkleizes a chunk list with minimal checks.
-///
-/// This follows the same result as [`merkleize_with_limit`] when the caller is
-/// already sure the chunk slice is valid and the limit is exactly `chunks.len()`.
 #[inline]
-pub fn merkleize_unsafe(chunks: &[Bytes32]) -> Bytes32 {
-    let limit = chunks.len();
+fn append_subtree(partials: &mut Vec<Option<Bytes32>>, mut level: usize, mut node: Bytes32) {
+    loop {
+        if level == partials.len() {
+            partials.push(Some(node));
+            return;
+        }
+        if let Some(left) = partials[level].take() {
+            node = hash_nodes(&left, &node);
+            level += 1;
+            continue;
+        }
+        partials[level] = Some(node);
+        return;
+    }
+}
 
+#[inline]
+fn merkleize_owned(mut level: Vec<Bytes32>, limit: usize) -> Result<Bytes32, String> {
+    if limit < level.len() {
+        return Err("merkleize limit smaller than input".to_string());
+    }
     if limit == 0 {
-        return Bytes32::zero();
+        return Ok(Bytes32::zero());
     }
 
     let mut width = 1usize;
@@ -88,41 +133,158 @@ pub fn merkleize_unsafe(chunks: &[Bytes32]) -> Bytes32 {
         width <<= 1;
     }
 
+    if level.is_empty() {
+        return Ok(zero_tree_root_no_check(width));
+    }
     if width == 1 {
-        return chunks[0];
+        return Ok(level[0]);
     }
 
-    let mut level: Vec<Bytes32> = chunks.to_vec();
     let mut subtree_size = 1usize;
-
     while subtree_size < width {
-        let next_len = (level.len() + 1) / 2;
-        let mut next: Vec<Bytes32> = Vec::with_capacity(next_len);
-        unsafe { next.set_len(next_len) };
-        let mut i = 0usize;
-        let mut out_idx = 0usize;
-        while i + 1 < level.len() {
-            let left = &level[i];
-            let right = &level[i + 1];
-            unsafe { write_at(&mut next, out_idx, hash_nodes(left, right)) };
-            i += 2;
-            out_idx += 1;
+        let active = level.len();
+        let mut read = 0usize;
+        let mut write = 0usize;
+        while read + 1 < active {
+            let left = level[read];
+            let right = level[read + 1];
+            level[write] = hash_nodes(&left, &right);
+            read += 2;
+            write += 1;
         }
-        if i != level.len() {
-            let left = &level[i];
-            unsafe {
-                write_at(
-                    &mut next,
-                    out_idx,
-                    hash_nodes(left, &zero_tree_root_no_check(subtree_size)),
-                )
-            };
+        if read != active {
+            let left = level[read];
+            level[write] = hash_nodes(&left, &zero_tree_root_no_check(subtree_size));
+            write += 1;
         }
-        level = next;
+        level.truncate(write);
         subtree_size <<= 1;
     }
 
-    level[0]
+    Ok(level[0])
+}
+
+#[inline]
+pub(crate) fn merkleize_owned_with_limit(level: Vec<Bytes32>, limit: usize) -> Result<Bytes32, String> {
+    merkleize_owned(level, limit)
+}
+
+#[inline]
+pub(crate) fn merkleize_packed_basic_with_limit<T>(
+    items: &[T],
+    elem_len: usize,
+    limit: usize,
+) -> Result<Bytes32, String>
+where
+    T: SszEncode,
+{
+    if limit == 0 {
+        return Ok(Bytes32::zero());
+    }
+    if elem_len > BYTES_PER_CHUNK {
+        let total = items
+            .len()
+            .checked_mul(elem_len)
+            .expect("packed basic total length overflows usize");
+        let mut bytes = Vec::with_capacity(total);
+        for item in items {
+            item.encode_ssz_into(&mut bytes);
+        }
+        let chunks = chunkify_fixed_non_empty(&bytes);
+        return merkleize_owned(chunks, limit);
+    }
+
+    let total = items
+        .len()
+        .checked_mul(elem_len)
+        .expect("packed basic total length overflows usize");
+    let chunk_count = total.div_ceil(BYTES_PER_CHUNK);
+    if limit < chunk_count {
+        return Err("merkleize limit smaller than input".to_string());
+    }
+
+    let mut width = 1usize;
+    while width < limit {
+        width <<= 1;
+    }
+    if chunk_count == 0 {
+        return Ok(zero_tree_root_no_check(width));
+    }
+
+    let max_level = width.trailing_zeros() as usize;
+    let mut partials = vec![None; max_level + 1];
+    let mut chunk = [0u8; 32];
+    let mut filled = 0usize;
+    let mut leaves = 0usize;
+
+    for item in items {
+        let space = BYTES_PER_CHUNK - filled;
+        if elem_len <= space {
+            unsafe { item.write_fixed_ssz(chunk.as_mut_ptr().add(filled)) };
+            filled += elem_len;
+            if filled == BYTES_PER_CHUNK {
+                append_subtree(&mut partials, 0, Bytes32::from(chunk));
+                chunk = [0u8; 32];
+                filled = 0;
+                leaves += 1;
+            }
+            continue;
+        }
+
+        let mut elem_buf = [0u8; 32];
+        unsafe { item.write_fixed_ssz(elem_buf.as_mut_ptr()) };
+        let mut src_start = 0usize;
+        while src_start < elem_len {
+            let space = BYTES_PER_CHUNK - filled;
+            let to_copy = (elem_len - src_start).min(space);
+            chunk[filled..filled + to_copy]
+                .copy_from_slice(&elem_buf[src_start..src_start + to_copy]);
+            filled += to_copy;
+            src_start += to_copy;
+
+            if filled == BYTES_PER_CHUNK {
+                append_subtree(&mut partials, 0, Bytes32::from(chunk));
+                chunk = [0u8; 32];
+                filled = 0;
+                leaves += 1;
+            }
+        }
+    }
+
+    if filled != 0 {
+        append_subtree(&mut partials, 0, Bytes32::from(chunk));
+        leaves += 1;
+    }
+
+    let mut remaining = width - leaves;
+    let mut level = 0usize;
+    while remaining != 0 {
+        if remaining & 1 == 1 {
+            append_subtree(
+                &mut partials,
+                level,
+                zero_tree_root_no_check(1usize << level),
+            );
+        }
+        remaining >>= 1;
+        level += 1;
+    }
+
+    partials
+        .into_iter()
+        .rev()
+        .flatten()
+        .next()
+        .ok_or_else(|| "merkleize limit smaller than input".to_string())
+}
+
+/// Merkleizes a chunk list with minimal checks.
+///
+/// This follows the same result as [`merkleize_with_limit`] when the caller is
+/// already sure the chunk slice is valid and the limit is exactly `chunks.len()`.
+#[inline]
+pub fn merkleize_unsafe(chunks: &[Bytes32]) -> Bytes32 {
+    merkleize_owned(chunks.to_vec(), chunks.len()).unwrap()
 }
 
 /// Specialized merkleization for exactly 5 field roots.
@@ -194,58 +356,7 @@ pub fn merkleize_tree_root_11(chunks: &[Bytes32]) -> Bytes32 {
 /// types. `limit` is expressed in chunks, not bytes.
 #[inline]
 pub fn merkleize_with_limit(chunks: &[Bytes32], limit: usize) -> Result<Bytes32, String> {
-    if limit < chunks.len() {
-        return Err("merkleize limit smaller than input".to_string());
-    }
-    if limit == 0 {
-        return Ok(Bytes32::zero());
-    }
-
-    let mut width = 1usize;
-    while width < limit {
-        width <<= 1;
-    }
-
-    if chunks.is_empty() {
-        return Ok(zero_tree_root_no_check(width));
-    }
-    if width == 1 {
-        return Ok(chunks[0]);
-    }
-
-    let mut level: Vec<Bytes32> = chunks.to_vec();
-    let mut subtree_size = 1usize;
-
-    while subtree_size < width {
-        let next_len = (level.len() + 1) / 2;
-        let mut next: Vec<Bytes32> = Vec::with_capacity(next_len);
-        unsafe { next.set_len(next_len) };
-        let mut i = 0usize;
-        let mut out_idx = 0usize;
-        while i + 1 < level.len() {
-            let left = &level[i];
-            unsafe {
-                write_at(&mut next, out_idx, hash_nodes(left, &level[i + 1]));
-                // safety: level.len() is bound by usize::MAX and based on the iteration pattern, out_idx will always be less than next_len.
-                out_idx = out_idx.unchecked_add(1);
-                i = i.unchecked_add(2);
-            };
-        }
-        if i != level.len() {
-            let left = &level[i];
-            unsafe {
-                write_at(
-                    &mut next,
-                    out_idx,
-                    hash_nodes(left, &zero_tree_root_no_check(subtree_size)),
-                );
-            };
-        }
-        level = next;
-        subtree_size <<= 1;
-    }
-
-    Ok(level[0])
+    merkleize_owned(chunks.to_vec(), limit)
 }
 
 /// Merkleizes a progressive chunk sequence using the EIP-7916 tree shape.
@@ -307,6 +418,7 @@ fn _zero_tree_root(width: usize) -> Bytes32 {
 #[cfg(test)]
 mod tests {
     use super::*;
+    use sha2::{Digest, Sha256};
 
     fn bytes32(byte: u8) -> Bytes32 {
         Bytes32::from([byte; 32])
@@ -316,6 +428,49 @@ mod tests {
     fn hash_nodes_zero_pair_matches_first_zero_hash() {
         let zero = Bytes32::zero();
         assert_eq!(hash_nodes(&zero, &zero), Bytes32::from(ZERO_HASHES[1]));
+    }
+
+    #[test]
+    fn merkleize_packed_basic_matches_chunked_path_for_u64() {
+        let items = [1u64, 2, 3, 4, 5];
+
+        let mut bytes = Vec::new();
+        for item in items {
+            bytes.extend_from_slice(&item.to_le_bytes());
+        }
+        let chunks = chunkify_fixed_non_empty(&bytes);
+        let expected = merkleize_with_limit(&chunks, 4).unwrap();
+
+        assert_eq!(
+            merkleize_packed_basic_with_limit(&items, 8, 4).unwrap(),
+            expected
+        );
+    }
+
+    #[test]
+    fn merkleize_packed_basic_matches_chunked_path_for_bytes32() {
+        let items = [bytes32(0x11), bytes32(0x22), bytes32(0x33)];
+
+        let chunks: Vec<Bytes32> = items.into_iter().collect();
+        let expected = merkleize_with_limit(&chunks, 4).unwrap();
+
+        assert_eq!(
+            merkleize_packed_basic_with_limit(&items, 32, 4).unwrap(),
+            expected
+        );
+    }
+
+    #[test]
+    fn hash_nodes_matches_sha256_digest_of_concat() {
+        let left = bytes32(0x11);
+        let right = bytes32(0x22);
+
+        let mut expected_input = [0u8; 64];
+        expected_input[..32].copy_from_slice(&left.as_array());
+        expected_input[32..].copy_from_slice(&right.as_array());
+        let expected = Sha256::digest(expected_input);
+
+        assert_eq!(hash_nodes(&left, &right), Bytes32::from_slice(&expected));
     }
 
     #[test]
@@ -412,6 +567,9 @@ mod tests {
     #[test]
     fn progressive_merkleize_single_chunk_is_identity() {
         let chunk = bytes32(7);
-        assert_eq!(merkleize_progressive(&[chunk]), hash_nodes(&Bytes32::zero(), &chunk));
+        assert_eq!(
+            merkleize_progressive(&[chunk]),
+            hash_nodes(&Bytes32::zero(), &chunk)
+        );
     }
 }

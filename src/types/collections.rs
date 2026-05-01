@@ -4,7 +4,8 @@
 //! encode/decode/hash-tree-root implementations for both fixed-size and
 //! variable-size element types.
 use crate::ssz::hash::{
-    BYTES_PER_CHUNK, chunkify_fixed_non_empty, merkleize_with_limit, mix_in_length,
+    BYTES_PER_CHUNK, merkleize_owned_with_limit, merkleize_packed_basic_with_limit,
+    mix_in_length,
 };
 use crate::ssz::{HashTreeRoot, SszDecode, SszElement, SszEncode, SszFixedLen};
 use crate::types::bytes::Bytes32;
@@ -33,57 +34,6 @@ pub struct SszVector<T, const LENGTH: usize> {
 pub struct SszList<T, const LIMIT: usize> {
     /// Backing elements in SSZ order.
     data: Vec<T>,
-}
-
-#[inline]
-fn pack_basic_fixed_chunks<T>(items: &[T], elem_len: usize) -> Vec<Bytes32>
-where
-    T: SszEncode,
-{
-    let total = items.len() * elem_len;
-    if total == 0 {
-        return Vec::new();
-    }
-
-    if elem_len > BYTES_PER_CHUNK {
-        let mut bytes = Vec::with_capacity(total);
-        for item in items {
-            item.encode_ssz_into(&mut bytes);
-        }
-        return chunkify_fixed_non_empty(&bytes);
-    }
-
-    let chunk_count = total.div_ceil(BYTES_PER_CHUNK);
-    let mut chunks = Vec::with_capacity(chunk_count);
-    let mut chunk = [0u8; 32];
-    let mut filled = 0usize;
-
-    for item in items {
-        let mut elem_buf = [0u8; 32];
-        unsafe { item.write_fixed_ssz(elem_buf.as_mut_ptr()) };
-        let mut src_start = 0usize;
-
-        while src_start < elem_len {
-            let space = BYTES_PER_CHUNK - filled;
-            let to_copy = (elem_len - src_start).min(space);
-            chunk[filled..filled + to_copy]
-                .copy_from_slice(&elem_buf[src_start..src_start + to_copy]);
-            filled += to_copy;
-            src_start += to_copy;
-
-            if filled == BYTES_PER_CHUNK {
-                chunks.push(Bytes32::from(chunk));
-                chunk = [0u8; 32];
-                filled = 0;
-            }
-        }
-    }
-
-    if filled != 0 {
-        chunks.push(Bytes32::from(chunk));
-    }
-
-    chunks
 }
 
 impl<T, const LENGTH: usize> SszVector<T, LENGTH> {
@@ -345,7 +295,11 @@ impl<T, const LIMIT: usize> SszList<T, LIMIT> {
     #[inline]
     pub fn push(&mut self, value: T) -> Result<(), String> {
         if self.data.len() == LIMIT {
-            return Err(format!("SszList length {} exceeds limit {}", LIMIT + 1, LIMIT));
+            return Err(format!(
+                "SszList length {} exceeds limit {}",
+                LIMIT + 1,
+                LIMIT
+            ));
         }
         self.data.push(value);
         Ok(())
@@ -369,7 +323,10 @@ impl<T, const LIMIT: usize> SszList<T, LIMIT> {
             .checked_add(additional)
             .ok_or_else(|| "SszList length overflow".to_string())?;
         if new_len > LIMIT {
-            return Err(format!("SszList length {} exceeds limit {}", new_len, LIMIT));
+            return Err(format!(
+                "SszList length {} exceeds limit {}",
+                new_len, LIMIT
+            ));
         }
 
         let start = self.data.len();
@@ -837,10 +794,9 @@ where
 {
     fn hash_tree_root(&self) -> [u8; 32] {
         if let Some(elem_len) = T::fixed_len_opt().filter(|_| T::tree_pack_basic()) {
-            let chunks = pack_basic_fixed_chunks(&self.data, elem_len);
             let limit_chunks = (LENGTH * elem_len).div_ceil(BYTES_PER_CHUNK);
-            let root =
-                merkleize_with_limit(&chunks, limit_chunks).unwrap_or_else(|_| Bytes32::zero());
+            let root = merkleize_packed_basic_with_limit(&self.data, elem_len, limit_chunks)
+                .unwrap_or_else(|_| Bytes32::zero());
             return *root.as_ref();
         }
 
@@ -851,7 +807,7 @@ where
             let root = Bytes32::from(item.hash_tree_root());
             unsafe { write_at(&mut chunks, i, root) };
         }
-        let root = merkleize_with_limit(&chunks, LENGTH).unwrap_or_else(|_| Bytes32::zero());
+        let root = merkleize_owned_with_limit(chunks, LENGTH).unwrap_or_else(|_| Bytes32::zero());
         *root.as_ref()
     }
 }
@@ -862,10 +818,9 @@ where
 {
     fn hash_tree_root(&self) -> [u8; 32] {
         if let Some(elem_len) = T::fixed_len_opt().filter(|_| T::tree_pack_basic()) {
-            let chunks = pack_basic_fixed_chunks(&self.data, elem_len);
             let limit_chunks = (LIMIT * elem_len).div_ceil(BYTES_PER_CHUNK);
-            let root =
-                merkleize_with_limit(&chunks, limit_chunks).unwrap_or_else(|_| Bytes32::zero());
+            let root = merkleize_packed_basic_with_limit(&self.data, elem_len, limit_chunks)
+                .unwrap_or_else(|_| Bytes32::zero());
             let mixed = mix_in_length(&root, self.data.len());
             return *mixed.as_ref();
         }
@@ -877,7 +832,7 @@ where
             let root = Bytes32::from(item.hash_tree_root());
             unsafe { write_at(&mut chunks, i, root) };
         }
-        let root = merkleize_with_limit(&chunks, LIMIT).unwrap_or_else(|_| Bytes32::zero());
+        let root = merkleize_owned_with_limit(chunks, LIMIT).unwrap_or_else(|_| Bytes32::zero());
         let mixed = mix_in_length(&root, count);
         *mixed.as_ref()
     }
