@@ -13,6 +13,11 @@ The design goals are straightforward:
 
 The crate depends only on `sha2` for hashing. Everything else stays in-tree.
 
+Warning: `peam-ssz` currently enables `sha2`'s `asm` backend on `aarch64`,
+`x86_64`, and `x86` builds to favor end-to-end throughput. The upstream `sha2`
+documentation treats this as an application-level choice; we keep it enabled
+here deliberately.
+
 ## Links
 
 - Crate: [crates.io/crates/peam-ssz](https://crates.io/crates/peam-ssz)
