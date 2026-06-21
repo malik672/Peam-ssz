@@ -11,10 +11,15 @@ pub unsafe fn write_at<T>(vec: &mut Vec<T>, index: usize, value: T) {
     }
 }
 
-/// Copies raw bytes into a pre-sized byte vector at `offset` without bounds checks.
+/// Copies raw bytes into a pre-sized byte vector at `offset` without append checks.
 ///
 /// The caller must guarantee that `offset..offset + bytes.len()` is valid inside
-/// the existing allocation.
+/// the vector's initialized length and that `bytes` does not overlap with the
+/// destination range.
+///
+/// This is the byte-slice version of writing directly into known output slots:
+/// callers pre-size the vector once, then fill exact offsets without repeatedly
+/// going through `Vec::push`/`extend_from_slice` capacity checks.
 #[inline]
 pub unsafe fn write_bytes_at(vec: &mut Vec<u8>, offset: usize, bytes: &[u8]) {
     unsafe {

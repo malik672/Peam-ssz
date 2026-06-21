@@ -301,7 +301,10 @@ impl<const LIMIT: usize> SszEncode for BitList<LIMIT> {
 
     fn encode_ssz_checked(&self) -> Result<Vec<u8>, String> {
         if self.len > LIMIT {
-            return Err(format!("BitList length {} exceeds limit {}", self.len, LIMIT));
+            return Err(format!(
+                "BitList length {} exceeds limit {}",
+                self.len, LIMIT
+            ));
         }
         Ok(self.pack_bits_with_terminator())
     }
@@ -351,9 +354,7 @@ mod tests {
     #[test]
     #[should_panic(expected = "BitVector expects 1 bytes, got 2")]
     fn bitvector_encode_rejects_invalid_internal_length() {
-        let value = BitVector::<8> {
-            data: vec![0u8; 2],
-        };
+        let value = BitVector::<8> { data: vec![0u8; 2] };
         let _ = value.encode_ssz();
     }
 
