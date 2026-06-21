@@ -1433,10 +1433,7 @@ fn containers_progressive_invalid() {
 
 #[test]
 fn containers_progressive_bits_valid() {
-    check_container_roundtrip_cases::<ProgressiveBitsStruct>(
-        "ProgressiveBitsStruct",
-        "containers",
-    );
+    check_container_roundtrip_cases::<ProgressiveBitsStruct>("ProgressiveBitsStruct", "containers");
 }
 
 #[test]
@@ -1508,7 +1505,10 @@ fn compatible_unions_invalid() {
         let ssz = loader::read_ssz_snappy(&case_path.join("serialized.ssz_snappy"));
 
         if case_name.starts_with("CompatibleUnionABCA") {
-            assert!(CompatibleUnionABCA::decode_ssz(&ssz).is_err(), "{case_name}");
+            assert!(
+                CompatibleUnionABCA::decode_ssz(&ssz).is_err(),
+                "{case_name}"
+            );
         } else if case_name.starts_with("CompatibleUnionBC") {
             assert!(CompatibleUnionBC::decode_ssz(&ssz).is_err(), "{case_name}");
         } else if case_name.starts_with("CompatibleUnionA") {
@@ -1554,8 +1554,7 @@ fn check_union_roundtrip<T>(ssz: &[u8], expected_root: &[u8; 32], case_name: &st
 where
     T: SszDecode + SszEncode + HashTreeRoot + std::fmt::Debug,
 {
-    let decoded =
-        T::decode_ssz(ssz).unwrap_or_else(|e| panic!("{case_name}: decode failed: {e}"));
+    let decoded = T::decode_ssz(ssz).unwrap_or_else(|e| panic!("{case_name}: decode failed: {e}"));
     assert_eq!(decoded.encode_ssz(), ssz, "{case_name}: roundtrip mismatch");
     assert_eq!(
         decoded.hash_tree_root(),

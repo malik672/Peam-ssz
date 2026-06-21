@@ -6,8 +6,8 @@
 #[path = "fixtures.rs"]
 mod fixtures;
 
-use criterion::{black_box, criterion_group, criterion_main, BenchmarkId, Criterion, Throughput};
-use fixtures::{make_header, make_nested_vec_u64, make_vec_u64, pre_encode, BeaconBlockHeader};
+use criterion::{BenchmarkId, Criterion, Throughput, black_box, criterion_group, criterion_main};
+use fixtures::{BeaconBlockHeader, make_header, make_nested_vec_u64, make_vec_u64, pre_encode};
 use libssz::{SszDecode as LibSszDecode, SszEncode as LibSszEncode};
 use libssz_merkle::HashTreeRoot as LibHashTreeRoot;
 use peam_ssz::ssz::hash::{hash_nodes, merkleize_unsafe};
@@ -244,7 +244,7 @@ fn diff_peam_encode_bytes32(c: &mut Criterion) {
 fn diff_peam_encode_vec_u64(c: &mut Criterion) {
     let mut group = c.benchmark_group("diff_peam/encode/vec_u64");
     for &size in &[1_000usize, 100_000] {
-        let data = make_vec_u64(size); 
+        let data = make_vec_u64(size);
         let peam = PeamList::<u64, PEAM_VEC_LIMIT>::new(data.clone()).unwrap();
         let ssz_rs = ssz_rs::List::<u64, PEAM_VEC_LIMIT>::try_from(data.clone()).unwrap();
 
@@ -523,9 +523,7 @@ fn diff_peam_htr_vec_u64(c: &mut Criterion) {
 
         group.throughput(Throughput::Elements(size as u64));
         group.bench_with_input(BenchmarkId::new("libssz", size), &data, |b, data| {
-            b.iter(|| {
-                LibHashTreeRoot::hash_tree_root(black_box(data), &libssz_merkle::Sha2Hasher)
-            });
+            b.iter(|| LibHashTreeRoot::hash_tree_root(black_box(data), &libssz_merkle::Sha2Hasher));
         });
         group.bench_with_input(BenchmarkId::new("ssz_rs", size), &ssz_rs, |b, data| {
             b.iter(|| {

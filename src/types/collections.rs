@@ -4,8 +4,7 @@
 //! encode/decode/hash-tree-root implementations for both fixed-size and
 //! variable-size element types.
 use crate::ssz::hash::{
-    BYTES_PER_CHUNK, merkleize_owned_with_limit, merkleize_packed_basic_with_limit,
-    mix_in_length,
+    BYTES_PER_CHUNK, merkleize_owned_with_limit, merkleize_packed_basic_with_limit, mix_in_length,
 };
 use crate::ssz::{HashTreeRoot, SszDecode, SszElement, SszEncode, SszFixedLen};
 use crate::types::bytes::Bytes32;

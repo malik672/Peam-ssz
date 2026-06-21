@@ -3,10 +3,7 @@
 //! This module contains the chunking and tree-building primitives used by
 //! containers, collections, bitfields, and progressive types.
 use super::SszEncode;
-use sha2::{
-    compress256,
-    digest::generic_array::GenericArray,
-};
+use sha2::{compress256, digest::generic_array::GenericArray};
 
 use crate::types::bytes::Bytes32;
 use crate::unsafe_vec::write_at;
@@ -96,7 +93,12 @@ pub fn pack_bytes(data: &[u8]) -> Vec<Bytes32> {
     chunkify_fixed_non_empty(data)
 }
 
-/// Merkleizes a chunk list using the chunk count as the width limit.
+/// Merkleizes a borrowed chunk list using the chunk count as the width limit.
+///
+/// This convenience API preserves the caller's input slice. Internally it must
+/// copy the chunks into owned scratch storage because merkleization rewrites each
+/// level in place. Callers that already own a `Vec<Bytes32>` should prefer the
+/// crate-local owned path to avoid that extra copy.
 #[inline]
 pub fn merkleize(chunks: &[Bytes32]) -> Bytes32 {
     merkleize_with_limit(chunks, chunks.len()).unwrap()
@@ -119,6 +121,16 @@ fn append_subtree(partials: &mut Vec<Option<Bytes32>>, mut level: usize, mut nod
     }
 }
 
+/// Merkleizes an owned chunk buffer in place.
+///
+/// The algorithm consumes `level` as mutable scratch: parent nodes overwrite the
+/// lower levels and the vector is truncated after each round. Taking ownership is
+/// intentional here; it lets callers that already built a `Vec<Bytes32>` avoid a
+/// second allocation/copy before hashing.
+///
+/// `limit` is the SSZ tree width in chunks. It may be larger than
+/// `level.len()`, in which case missing leaves are treated as zero subtrees. A
+/// smaller limit is invalid because it would drop input chunks from the tree.
 #[inline]
 fn merkleize_owned(mut level: Vec<Bytes32>, limit: usize) -> Result<Bytes32, String> {
     if limit < level.len() {
@@ -164,8 +176,16 @@ fn merkleize_owned(mut level: Vec<Bytes32>, limit: usize) -> Result<Bytes32, Str
     Ok(level[0])
 }
 
+/// Merkleizes an owned chunk buffer against an explicit SSZ width limit.
+///
+/// Use this when the caller has already materialized chunk roots in a `Vec`. It
+/// forwards to the in-place worker and avoids the `chunks.to_vec()` copy paid by
+/// the borrowed public APIs.
 #[inline]
-pub(crate) fn merkleize_owned_with_limit(level: Vec<Bytes32>, limit: usize) -> Result<Bytes32, String> {
+pub(crate) fn merkleize_owned_with_limit(
+    level: Vec<Bytes32>,
+    limit: usize,
+) -> Result<Bytes32, String> {
     merkleize_owned(level, limit)
 }
 
@@ -278,10 +298,13 @@ where
         .ok_or_else(|| "merkleize limit smaller than input".to_string())
 }
 
-/// Merkleizes a chunk list with minimal checks.
+/// Merkleizes a borrowed chunk list with minimal checks.
 ///
 /// This follows the same result as [`merkleize_with_limit`] when the caller is
 /// already sure the chunk slice is valid and the limit is exactly `chunks.len()`.
+///
+/// Despite the name, this still copies `chunks` into owned scratch storage before
+/// hashing so that the caller's slice is not modified.
 #[inline]
 pub fn merkleize_unsafe(chunks: &[Bytes32]) -> Bytes32 {
     merkleize_owned(chunks.to_vec(), chunks.len()).unwrap()
@@ -354,6 +377,11 @@ pub fn merkleize_tree_root_11(chunks: &[Bytes32]) -> Bytes32 {
 ///
 /// This is the general-purpose entry point used by collection and container
 /// types. `limit` is expressed in chunks, not bytes.
+///
+/// Because this API accepts a borrowed slice, it copies `chunks` into owned
+/// scratch storage before reducing the tree. If the caller has already produced a
+/// `Vec<Bytes32>`, use the owned crate-local path instead to avoid copying the
+/// chunk buffer again.
 #[inline]
 pub fn merkleize_with_limit(chunks: &[Bytes32], limit: usize) -> Result<Bytes32, String> {
     merkleize_owned(chunks.to_vec(), limit)

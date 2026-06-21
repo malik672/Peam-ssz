@@ -20,7 +20,14 @@ const MAINNET_FORKS: &[&str] = &[
 ];
 const LEGACY_ATTESTATION_FORKS: &[&str] = &["phase0", "altair", "bellatrix", "capella", "deneb"];
 const ALTAIR_PLUS_FORKS: &[&str] = &[
-    "altair", "bellatrix", "capella", "deneb", "electra", "fulu", "gloas", "eip7805",
+    "altair",
+    "bellatrix",
+    "capella",
+    "deneb",
+    "electra",
+    "fulu",
+    "gloas",
+    "eip7805",
 ];
 const ALTAIR_ONLY_FORKS: &[&str] = &["altair"];
 
@@ -64,8 +71,7 @@ fn check_roundtrip_root<T: SszDecode + SszEncode + HashTreeRoot + std::fmt::Debu
     expected_root: &[u8; 32],
     case_name: &str,
 ) {
-    let decoded =
-        T::decode_ssz(ssz).unwrap_or_else(|e| panic!("{case_name}: decode failed: {e}"));
+    let decoded = T::decode_ssz(ssz).unwrap_or_else(|e| panic!("{case_name}: decode failed: {e}"));
     assert_eq!(decoded.encode_ssz(), ssz, "{case_name}: roundtrip mismatch");
     assert_eq!(
         decoded.hash_tree_root(),
@@ -94,10 +100,17 @@ fn run_mainnet_type_for_forks<T: SszDecode + SszEncode + HashTreeRoot + std::fmt
         for (case_path, case_name) in cases {
             let ssz = loader::read_ssz_snappy(&case_path.join("serialized.ssz_snappy"));
             let expected_root = loader::parse_root(&case_path.join("roots.yaml"));
-            check_roundtrip_root::<T>(&ssz, &expected_root, &format!("{fork}/{type_name}/{case_name}"));
+            check_roundtrip_root::<T>(
+                &ssz,
+                &expected_root,
+                &format!("{fork}/{type_name}/{case_name}"),
+            );
         }
     }
-    assert!(found_any, "{type_name}: no test cases found in local mainnet archive");
+    assert!(
+        found_any,
+        "{type_name}: no test cases found in local mainnet archive"
+    );
 }
 
 #[derive(Debug, PartialEq, Eq)]
@@ -328,7 +341,10 @@ impl SszDecode for SignedBeaconBlockHeader {
     fn decode_ssz(bytes: &[u8]) -> Result<Self, String> {
         let slices = decode_field_slices(
             bytes,
-            &[ContainerFieldKind::Fixed(112), ContainerFieldKind::Fixed(96)],
+            &[
+                ContainerFieldKind::Fixed(112),
+                ContainerFieldKind::Fixed(96),
+            ],
         )?;
         Ok(Self {
             message: BeaconBlockHeader::decode_ssz(slices[0])?,
@@ -1000,7 +1016,10 @@ impl SszDecode for ProposerSlashing {
     fn decode_ssz(bytes: &[u8]) -> Result<Self, String> {
         let slices = decode_field_slices(
             bytes,
-            &[ContainerFieldKind::Fixed(208), ContainerFieldKind::Fixed(208)],
+            &[
+                ContainerFieldKind::Fixed(208),
+                ContainerFieldKind::Fixed(208),
+            ],
         )?;
         Ok(Self {
             signed_header_1: SignedBeaconBlockHeader::decode_ssz(slices[0])?,
@@ -1124,8 +1143,10 @@ impl SszEncode for SignedAggregateAndProof {
 
 impl SszDecode for SignedAggregateAndProof {
     fn decode_ssz(bytes: &[u8]) -> Result<Self, String> {
-        let slices =
-            decode_field_slices(bytes, &[ContainerFieldKind::Variable, ContainerFieldKind::Fixed(96)])?;
+        let slices = decode_field_slices(
+            bytes,
+            &[ContainerFieldKind::Variable, ContainerFieldKind::Fixed(96)],
+        )?;
         Ok(Self {
             message: AggregateAndProof::decode_ssz(slices[0])?,
             signature: <[u8; 96]>::decode_ssz(slices[1])?,
@@ -1163,7 +1184,10 @@ impl SszDecode for Deposit {
     fn decode_ssz(bytes: &[u8]) -> Result<Self, String> {
         let slices = decode_field_slices(
             bytes,
-            &[ContainerFieldKind::Fixed(32 * 33), ContainerFieldKind::Fixed(184)],
+            &[
+                ContainerFieldKind::Fixed(32 * 33),
+                ContainerFieldKind::Fixed(184),
+            ],
         )?;
         Ok(Self {
             proof: SszVector::<[u8; 32], DEPOSIT_PROOF_LEN>::decode_ssz_checked(slices[0])?,
@@ -1200,7 +1224,10 @@ impl SszDecode for HistoricalBatch {
         let roots_len = 32 * SLOTS_PER_HISTORICAL_ROOT;
         let slices = decode_field_slices(
             bytes,
-            &[ContainerFieldKind::Fixed(roots_len), ContainerFieldKind::Fixed(roots_len)],
+            &[
+                ContainerFieldKind::Fixed(roots_len),
+                ContainerFieldKind::Fixed(roots_len),
+            ],
         )?;
         Ok(Self {
             block_roots: SszVector::<[u8; 32], SLOTS_PER_HISTORICAL_ROOT>::decode_ssz_checked(
@@ -1289,7 +1316,10 @@ impl SszDecode for SyncCommittee {
         let pubkeys_len = 48 * SYNC_COMMITTEE_SIZE;
         let slices = decode_field_slices(
             bytes,
-            &[ContainerFieldKind::Fixed(pubkeys_len), ContainerFieldKind::Fixed(48)],
+            &[
+                ContainerFieldKind::Fixed(pubkeys_len),
+                ContainerFieldKind::Fixed(48),
+            ],
         )?;
         Ok(Self {
             pubkeys: SszVector::<[u8; 48], SYNC_COMMITTEE_SIZE>::decode_ssz_checked(slices[0])?,
@@ -1508,7 +1538,10 @@ impl SszDecode for SignedContributionAndProof {
     fn decode_ssz(bytes: &[u8]) -> Result<Self, String> {
         let slices = decode_field_slices(
             bytes,
-            &[ContainerFieldKind::Fixed(264), ContainerFieldKind::Fixed(96)],
+            &[
+                ContainerFieldKind::Fixed(264),
+                ContainerFieldKind::Fixed(96),
+            ],
         )?;
         Ok(Self {
             message: ContributionAndProof::decode_ssz(slices[0])?,
@@ -1908,11 +1941,14 @@ impl SszDecode for Phase0BeaconBlockBody {
             randao_reveal: <[u8; 96]>::decode_ssz(slices[0])?,
             eth1_data: Eth1Data::decode_ssz(slices[1])?,
             graffiti: <[u8; 32]>::decode_ssz(slices[2])?,
-            proposer_slashings: SszList::<ProposerSlashing, MAX_PROPOSER_SLASHINGS>::decode_ssz_checked(slices[3])?,
-            attester_slashings: SszList::<AttesterSlashing, MAX_ATTESTER_SLASHINGS>::decode_ssz_checked(slices[4])?,
+            proposer_slashings:
+                SszList::<ProposerSlashing, MAX_PROPOSER_SLASHINGS>::decode_ssz_checked(slices[3])?,
+            attester_slashings:
+                SszList::<AttesterSlashing, MAX_ATTESTER_SLASHINGS>::decode_ssz_checked(slices[4])?,
             attestations: SszList::<Attestation, MAX_ATTESTATIONS>::decode_ssz_checked(slices[5])?,
             deposits: SszList::<Deposit, MAX_DEPOSITS>::decode_ssz_checked(slices[6])?,
-            voluntary_exits: SszList::<SignedVoluntaryExit, MAX_VOLUNTARY_EXITS>::decode_ssz_checked(slices[7])?,
+            voluntary_exits:
+                SszList::<SignedVoluntaryExit, MAX_VOLUNTARY_EXITS>::decode_ssz_checked(slices[7])?,
         })
     }
 }
@@ -2089,11 +2125,14 @@ impl SszDecode for AltairBeaconBlockBody {
             randao_reveal: <[u8; 96]>::decode_ssz(slices[0])?,
             eth1_data: Eth1Data::decode_ssz(slices[1])?,
             graffiti: <[u8; 32]>::decode_ssz(slices[2])?,
-            proposer_slashings: SszList::<ProposerSlashing, MAX_PROPOSER_SLASHINGS>::decode_ssz_checked(slices[3])?,
-            attester_slashings: SszList::<AttesterSlashing, MAX_ATTESTER_SLASHINGS>::decode_ssz_checked(slices[4])?,
+            proposer_slashings:
+                SszList::<ProposerSlashing, MAX_PROPOSER_SLASHINGS>::decode_ssz_checked(slices[3])?,
+            attester_slashings:
+                SszList::<AttesterSlashing, MAX_ATTESTER_SLASHINGS>::decode_ssz_checked(slices[4])?,
             attestations: SszList::<Attestation, MAX_ATTESTATIONS>::decode_ssz_checked(slices[5])?,
             deposits: SszList::<Deposit, MAX_DEPOSITS>::decode_ssz_checked(slices[6])?,
-            voluntary_exits: SszList::<SignedVoluntaryExit, MAX_VOLUNTARY_EXITS>::decode_ssz_checked(slices[7])?,
+            voluntary_exits:
+                SszList::<SignedVoluntaryExit, MAX_VOLUNTARY_EXITS>::decode_ssz_checked(slices[7])?,
             sync_aggregate: SyncAggregate::decode_ssz(slices[8])?,
         })
     }
@@ -2322,19 +2361,41 @@ impl SszDecode for Phase0BeaconState {
             slot: u64::decode_ssz(slices[2])?,
             fork: Fork::decode_ssz(slices[3])?,
             latest_block_header: BeaconBlockHeader::decode_ssz(slices[4])?,
-            block_roots: SszVector::<[u8; 32], SLOTS_PER_HISTORICAL_ROOT>::decode_ssz_checked(slices[5])?,
-            state_roots: SszVector::<[u8; 32], SLOTS_PER_HISTORICAL_ROOT>::decode_ssz_checked(slices[6])?,
-            historical_roots: SszList::<[u8; 32], HISTORICAL_ROOTS_LIMIT>::decode_ssz_checked(slices[7])?,
+            block_roots: SszVector::<[u8; 32], SLOTS_PER_HISTORICAL_ROOT>::decode_ssz_checked(
+                slices[5],
+            )?,
+            state_roots: SszVector::<[u8; 32], SLOTS_PER_HISTORICAL_ROOT>::decode_ssz_checked(
+                slices[6],
+            )?,
+            historical_roots: SszList::<[u8; 32], HISTORICAL_ROOTS_LIMIT>::decode_ssz_checked(
+                slices[7],
+            )?,
             eth1_data: Eth1Data::decode_ssz(slices[8])?,
-            eth1_data_votes: SszList::<Eth1Data, ETH1_DATA_VOTES_LIMIT>::decode_ssz_checked(slices[9])?,
+            eth1_data_votes: SszList::<Eth1Data, ETH1_DATA_VOTES_LIMIT>::decode_ssz_checked(
+                slices[9],
+            )?,
             eth1_deposit_index: u64::decode_ssz(slices[10])?,
-            validators: SszList::<Validator, VALIDATOR_REGISTRY_LIMIT>::decode_ssz_checked(slices[11])?,
+            validators: SszList::<Validator, VALIDATOR_REGISTRY_LIMIT>::decode_ssz_checked(
+                slices[11],
+            )?,
             balances: SszList::<u64, VALIDATOR_REGISTRY_LIMIT>::decode_ssz_checked(slices[12])?,
-            randao_mixes: SszVector::<[u8; 32], EPOCHS_PER_HISTORICAL_VECTOR>::decode_ssz_checked(slices[13])?,
-            slashings: SszVector::<u64, EPOCHS_PER_SLASHINGS_VECTOR>::decode_ssz_checked(slices[14])?,
-            previous_epoch_attestations: SszList::<PendingAttestation, PENDING_ATTESTATIONS_LIMIT>::decode_ssz_checked(slices[15])?,
-            current_epoch_attestations: SszList::<PendingAttestation, PENDING_ATTESTATIONS_LIMIT>::decode_ssz_checked(slices[16])?,
-            justification_bits: BitVector::<JUSTIFICATION_BITS_LENGTH>::decode_ssz_checked(slices[17])?,
+            randao_mixes: SszVector::<[u8; 32], EPOCHS_PER_HISTORICAL_VECTOR>::decode_ssz_checked(
+                slices[13],
+            )?,
+            slashings: SszVector::<u64, EPOCHS_PER_SLASHINGS_VECTOR>::decode_ssz_checked(
+                slices[14],
+            )?,
+            previous_epoch_attestations:
+                SszList::<PendingAttestation, PENDING_ATTESTATIONS_LIMIT>::decode_ssz_checked(
+                    slices[15],
+                )?,
+            current_epoch_attestations:
+                SszList::<PendingAttestation, PENDING_ATTESTATIONS_LIMIT>::decode_ssz_checked(
+                    slices[16],
+                )?,
+            justification_bits: BitVector::<JUSTIFICATION_BITS_LENGTH>::decode_ssz_checked(
+                slices[17],
+            )?,
             previous_justified_checkpoint: Checkpoint::decode_ssz(slices[18])?,
             current_justified_checkpoint: Checkpoint::decode_ssz(slices[19])?,
             finalized_checkpoint: Checkpoint::decode_ssz(slices[20])?,
@@ -2491,23 +2552,43 @@ impl SszDecode for AltairBeaconState {
             slot: u64::decode_ssz(slices[2])?,
             fork: Fork::decode_ssz(slices[3])?,
             latest_block_header: BeaconBlockHeader::decode_ssz(slices[4])?,
-            block_roots: SszVector::<[u8; 32], SLOTS_PER_HISTORICAL_ROOT>::decode_ssz_checked(slices[5])?,
-            state_roots: SszVector::<[u8; 32], SLOTS_PER_HISTORICAL_ROOT>::decode_ssz_checked(slices[6])?,
-            historical_roots: SszList::<[u8; 32], HISTORICAL_ROOTS_LIMIT>::decode_ssz_checked(slices[7])?,
+            block_roots: SszVector::<[u8; 32], SLOTS_PER_HISTORICAL_ROOT>::decode_ssz_checked(
+                slices[5],
+            )?,
+            state_roots: SszVector::<[u8; 32], SLOTS_PER_HISTORICAL_ROOT>::decode_ssz_checked(
+                slices[6],
+            )?,
+            historical_roots: SszList::<[u8; 32], HISTORICAL_ROOTS_LIMIT>::decode_ssz_checked(
+                slices[7],
+            )?,
             eth1_data: Eth1Data::decode_ssz(slices[8])?,
-            eth1_data_votes: SszList::<Eth1Data, ETH1_DATA_VOTES_LIMIT>::decode_ssz_checked(slices[9])?,
+            eth1_data_votes: SszList::<Eth1Data, ETH1_DATA_VOTES_LIMIT>::decode_ssz_checked(
+                slices[9],
+            )?,
             eth1_deposit_index: u64::decode_ssz(slices[10])?,
-            validators: SszList::<Validator, VALIDATOR_REGISTRY_LIMIT>::decode_ssz_checked(slices[11])?,
+            validators: SszList::<Validator, VALIDATOR_REGISTRY_LIMIT>::decode_ssz_checked(
+                slices[11],
+            )?,
             balances: SszList::<u64, VALIDATOR_REGISTRY_LIMIT>::decode_ssz_checked(slices[12])?,
-            randao_mixes: SszVector::<[u8; 32], EPOCHS_PER_HISTORICAL_VECTOR>::decode_ssz_checked(slices[13])?,
-            slashings: SszVector::<u64, EPOCHS_PER_SLASHINGS_VECTOR>::decode_ssz_checked(slices[14])?,
-            previous_epoch_participation: SszList::<u8, VALIDATOR_REGISTRY_LIMIT>::decode_ssz_checked(slices[15])?,
-            current_epoch_participation: SszList::<u8, VALIDATOR_REGISTRY_LIMIT>::decode_ssz_checked(slices[16])?,
-            justification_bits: BitVector::<JUSTIFICATION_BITS_LENGTH>::decode_ssz_checked(slices[17])?,
+            randao_mixes: SszVector::<[u8; 32], EPOCHS_PER_HISTORICAL_VECTOR>::decode_ssz_checked(
+                slices[13],
+            )?,
+            slashings: SszVector::<u64, EPOCHS_PER_SLASHINGS_VECTOR>::decode_ssz_checked(
+                slices[14],
+            )?,
+            previous_epoch_participation:
+                SszList::<u8, VALIDATOR_REGISTRY_LIMIT>::decode_ssz_checked(slices[15])?,
+            current_epoch_participation:
+                SszList::<u8, VALIDATOR_REGISTRY_LIMIT>::decode_ssz_checked(slices[16])?,
+            justification_bits: BitVector::<JUSTIFICATION_BITS_LENGTH>::decode_ssz_checked(
+                slices[17],
+            )?,
             previous_justified_checkpoint: Checkpoint::decode_ssz(slices[18])?,
             current_justified_checkpoint: Checkpoint::decode_ssz(slices[19])?,
             finalized_checkpoint: Checkpoint::decode_ssz(slices[20])?,
-            inactivity_scores: SszList::<u64, VALIDATOR_REGISTRY_LIMIT>::decode_ssz_checked(slices[21])?,
+            inactivity_scores: SszList::<u64, VALIDATOR_REGISTRY_LIMIT>::decode_ssz_checked(
+                slices[21],
+            )?,
             current_sync_committee: SyncCommittee::decode_ssz(slices[22])?,
             next_sync_committee: SyncCommittee::decode_ssz(slices[23])?,
         })
@@ -2633,7 +2714,10 @@ impl SszDecode for ExecutionPayload {
             extra_data: SszList::<u8, MAX_EXTRA_DATA_BYTES>::decode_ssz_checked(slices[10])?,
             base_fee_per_gas: <[u8; 32]>::decode_ssz(slices[11])?,
             block_hash: <[u8; 32]>::decode_ssz(slices[12])?,
-            transactions: SszList::<SszList<u8, MAX_BYTES_PER_TRANSACTION>, MAX_TRANSACTIONS_PER_PAYLOAD>::decode_ssz_checked(slices[13])?,
+            transactions: SszList::<
+                SszList<u8, MAX_BYTES_PER_TRANSACTION>,
+                MAX_TRANSACTIONS_PER_PAYLOAD,
+            >::decode_ssz_checked(slices[13])?,
         })
     }
 }
@@ -2883,11 +2967,14 @@ impl SszDecode for BellatrixBeaconBlockBody {
             randao_reveal: <[u8; 96]>::decode_ssz(slices[0])?,
             eth1_data: Eth1Data::decode_ssz(slices[1])?,
             graffiti: <[u8; 32]>::decode_ssz(slices[2])?,
-            proposer_slashings: SszList::<ProposerSlashing, MAX_PROPOSER_SLASHINGS>::decode_ssz_checked(slices[3])?,
-            attester_slashings: SszList::<AttesterSlashing, MAX_ATTESTER_SLASHINGS>::decode_ssz_checked(slices[4])?,
+            proposer_slashings:
+                SszList::<ProposerSlashing, MAX_PROPOSER_SLASHINGS>::decode_ssz_checked(slices[3])?,
+            attester_slashings:
+                SszList::<AttesterSlashing, MAX_ATTESTER_SLASHINGS>::decode_ssz_checked(slices[4])?,
             attestations: SszList::<Attestation, MAX_ATTESTATIONS>::decode_ssz_checked(slices[5])?,
             deposits: SszList::<Deposit, MAX_DEPOSITS>::decode_ssz_checked(slices[6])?,
-            voluntary_exits: SszList::<SignedVoluntaryExit, MAX_VOLUNTARY_EXITS>::decode_ssz_checked(slices[7])?,
+            voluntary_exits:
+                SszList::<SignedVoluntaryExit, MAX_VOLUNTARY_EXITS>::decode_ssz_checked(slices[7])?,
             sync_aggregate: SyncAggregate::decode_ssz(slices[8])?,
             execution_payload: ExecutionPayload::decode_ssz(slices[9])?,
         })
@@ -3135,23 +3222,43 @@ impl SszDecode for BellatrixBeaconState {
             slot: u64::decode_ssz(slices[2])?,
             fork: Fork::decode_ssz(slices[3])?,
             latest_block_header: BeaconBlockHeader::decode_ssz(slices[4])?,
-            block_roots: SszVector::<[u8; 32], SLOTS_PER_HISTORICAL_ROOT>::decode_ssz_checked(slices[5])?,
-            state_roots: SszVector::<[u8; 32], SLOTS_PER_HISTORICAL_ROOT>::decode_ssz_checked(slices[6])?,
-            historical_roots: SszList::<[u8; 32], HISTORICAL_ROOTS_LIMIT>::decode_ssz_checked(slices[7])?,
+            block_roots: SszVector::<[u8; 32], SLOTS_PER_HISTORICAL_ROOT>::decode_ssz_checked(
+                slices[5],
+            )?,
+            state_roots: SszVector::<[u8; 32], SLOTS_PER_HISTORICAL_ROOT>::decode_ssz_checked(
+                slices[6],
+            )?,
+            historical_roots: SszList::<[u8; 32], HISTORICAL_ROOTS_LIMIT>::decode_ssz_checked(
+                slices[7],
+            )?,
             eth1_data: Eth1Data::decode_ssz(slices[8])?,
-            eth1_data_votes: SszList::<Eth1Data, ETH1_DATA_VOTES_LIMIT>::decode_ssz_checked(slices[9])?,
+            eth1_data_votes: SszList::<Eth1Data, ETH1_DATA_VOTES_LIMIT>::decode_ssz_checked(
+                slices[9],
+            )?,
             eth1_deposit_index: u64::decode_ssz(slices[10])?,
-            validators: SszList::<Validator, VALIDATOR_REGISTRY_LIMIT>::decode_ssz_checked(slices[11])?,
+            validators: SszList::<Validator, VALIDATOR_REGISTRY_LIMIT>::decode_ssz_checked(
+                slices[11],
+            )?,
             balances: SszList::<u64, VALIDATOR_REGISTRY_LIMIT>::decode_ssz_checked(slices[12])?,
-            randao_mixes: SszVector::<[u8; 32], EPOCHS_PER_HISTORICAL_VECTOR>::decode_ssz_checked(slices[13])?,
-            slashings: SszVector::<u64, EPOCHS_PER_SLASHINGS_VECTOR>::decode_ssz_checked(slices[14])?,
-            previous_epoch_participation: SszList::<u8, VALIDATOR_REGISTRY_LIMIT>::decode_ssz_checked(slices[15])?,
-            current_epoch_participation: SszList::<u8, VALIDATOR_REGISTRY_LIMIT>::decode_ssz_checked(slices[16])?,
-            justification_bits: BitVector::<JUSTIFICATION_BITS_LENGTH>::decode_ssz_checked(slices[17])?,
+            randao_mixes: SszVector::<[u8; 32], EPOCHS_PER_HISTORICAL_VECTOR>::decode_ssz_checked(
+                slices[13],
+            )?,
+            slashings: SszVector::<u64, EPOCHS_PER_SLASHINGS_VECTOR>::decode_ssz_checked(
+                slices[14],
+            )?,
+            previous_epoch_participation:
+                SszList::<u8, VALIDATOR_REGISTRY_LIMIT>::decode_ssz_checked(slices[15])?,
+            current_epoch_participation:
+                SszList::<u8, VALIDATOR_REGISTRY_LIMIT>::decode_ssz_checked(slices[16])?,
+            justification_bits: BitVector::<JUSTIFICATION_BITS_LENGTH>::decode_ssz_checked(
+                slices[17],
+            )?,
             previous_justified_checkpoint: Checkpoint::decode_ssz(slices[18])?,
             current_justified_checkpoint: Checkpoint::decode_ssz(slices[19])?,
             finalized_checkpoint: Checkpoint::decode_ssz(slices[20])?,
-            inactivity_scores: SszList::<u64, VALIDATOR_REGISTRY_LIMIT>::decode_ssz_checked(slices[21])?,
+            inactivity_scores: SszList::<u64, VALIDATOR_REGISTRY_LIMIT>::decode_ssz_checked(
+                slices[21],
+            )?,
             current_sync_committee: SyncCommittee::decode_ssz(slices[22])?,
             next_sync_committee: SyncCommittee::decode_ssz(slices[23])?,
             latest_execution_payload_header: ExecutionPayloadHeader::decode_ssz(slices[24])?,
@@ -3463,8 +3570,13 @@ impl SszDecode for CapellaExecutionPayload {
             extra_data: SszList::<u8, MAX_EXTRA_DATA_BYTES>::decode_ssz_checked(slices[10])?,
             base_fee_per_gas: <[u8; 32]>::decode_ssz(slices[11])?,
             block_hash: <[u8; 32]>::decode_ssz(slices[12])?,
-            transactions: SszList::<SszList<u8, MAX_BYTES_PER_TRANSACTION>, MAX_TRANSACTIONS_PER_PAYLOAD>::decode_ssz_checked(slices[13])?,
-            withdrawals: SszList::<Withdrawal, MAX_WITHDRAWALS_PER_PAYLOAD>::decode_ssz_checked(slices[14])?,
+            transactions: SszList::<
+                SszList<u8, MAX_BYTES_PER_TRANSACTION>,
+                MAX_TRANSACTIONS_PER_PAYLOAD,
+            >::decode_ssz_checked(slices[13])?,
+            withdrawals: SszList::<Withdrawal, MAX_WITHDRAWALS_PER_PAYLOAD>::decode_ssz_checked(
+                slices[14],
+            )?,
         })
     }
 }
@@ -3677,14 +3789,20 @@ impl SszDecode for CapellaBeaconBlockBody {
             randao_reveal: <[u8; 96]>::decode_ssz(slices[0])?,
             eth1_data: Eth1Data::decode_ssz(slices[1])?,
             graffiti: <[u8; 32]>::decode_ssz(slices[2])?,
-            proposer_slashings: SszList::<ProposerSlashing, MAX_PROPOSER_SLASHINGS>::decode_ssz_checked(slices[3])?,
-            attester_slashings: SszList::<AttesterSlashing, MAX_ATTESTER_SLASHINGS>::decode_ssz_checked(slices[4])?,
+            proposer_slashings:
+                SszList::<ProposerSlashing, MAX_PROPOSER_SLASHINGS>::decode_ssz_checked(slices[3])?,
+            attester_slashings:
+                SszList::<AttesterSlashing, MAX_ATTESTER_SLASHINGS>::decode_ssz_checked(slices[4])?,
             attestations: SszList::<Attestation, MAX_ATTESTATIONS>::decode_ssz_checked(slices[5])?,
             deposits: SszList::<Deposit, MAX_DEPOSITS>::decode_ssz_checked(slices[6])?,
-            voluntary_exits: SszList::<SignedVoluntaryExit, MAX_VOLUNTARY_EXITS>::decode_ssz_checked(slices[7])?,
+            voluntary_exits:
+                SszList::<SignedVoluntaryExit, MAX_VOLUNTARY_EXITS>::decode_ssz_checked(slices[7])?,
             sync_aggregate: SyncAggregate::decode_ssz(slices[8])?,
             execution_payload: CapellaExecutionPayload::decode_ssz(slices[9])?,
-            bls_to_execution_changes: SszList::<SignedBLSToExecutionChange, MAX_BLS_TO_EXECUTION_CHANGES>::decode_ssz_checked(slices[10])?,
+            bls_to_execution_changes: SszList::<
+                SignedBLSToExecutionChange,
+                MAX_BLS_TO_EXECUTION_CHANGES,
+            >::decode_ssz_checked(slices[10])?,
         })
     }
 }
@@ -3839,7 +3957,9 @@ impl SszDecode for CapellaLightClientHeader {
         Ok(Self {
             beacon: BeaconBlockHeader::decode_ssz(slices[0])?,
             execution: CapellaExecutionPayloadHeader::decode_ssz(slices[1])?,
-            execution_branch: SszVector::<[u8; 32], EXECUTION_BRANCH_LEN>::decode_ssz_checked(slices[2])?,
+            execution_branch: SszVector::<[u8; 32], EXECUTION_BRANCH_LEN>::decode_ssz_checked(
+                slices[2],
+            )?,
         })
     }
 }
@@ -3888,7 +4008,10 @@ impl SszDecode for CapellaLightClientBootstrap {
         Ok(Self {
             header: CapellaLightClientHeader::decode_ssz(slices[0])?,
             current_sync_committee: SyncCommittee::decode_ssz(slices[1])?,
-            current_sync_committee_branch: SszVector::<[u8; 32], CURRENT_SYNC_COMMITTEE_BRANCH_LEN>::decode_ssz_checked(slices[2])?,
+            current_sync_committee_branch:
+                SszVector::<[u8; 32], CURRENT_SYNC_COMMITTEE_BRANCH_LEN>::decode_ssz_checked(
+                    slices[2],
+                )?,
         })
     }
 }
@@ -3953,9 +4076,14 @@ impl SszDecode for CapellaLightClientUpdate {
         Ok(Self {
             attested_header: CapellaLightClientHeader::decode_ssz(slices[0])?,
             next_sync_committee: SyncCommittee::decode_ssz(slices[1])?,
-            next_sync_committee_branch: SszVector::<[u8; 32], NEXT_SYNC_COMMITTEE_BRANCH_LEN>::decode_ssz_checked(slices[2])?,
+            next_sync_committee_branch:
+                SszVector::<[u8; 32], NEXT_SYNC_COMMITTEE_BRANCH_LEN>::decode_ssz_checked(
+                    slices[2],
+                )?,
             finalized_header: CapellaLightClientHeader::decode_ssz(slices[3])?,
-            finality_branch: SszVector::<[u8; 32], FINALITY_BRANCH_LEN>::decode_ssz_checked(slices[4])?,
+            finality_branch: SszVector::<[u8; 32], FINALITY_BRANCH_LEN>::decode_ssz_checked(
+                slices[4],
+            )?,
             sync_aggregate: SyncAggregate::decode_ssz(slices[5])?,
             signature_slot: u64::decode_ssz(slices[6])?,
         })
@@ -4017,7 +4145,9 @@ impl SszDecode for CapellaLightClientFinalityUpdate {
         Ok(Self {
             attested_header: CapellaLightClientHeader::decode_ssz(slices[0])?,
             finalized_header: CapellaLightClientHeader::decode_ssz(slices[1])?,
-            finality_branch: SszVector::<[u8; 32], FINALITY_BRANCH_LEN>::decode_ssz_checked(slices[2])?,
+            finality_branch: SszVector::<[u8; 32], FINALITY_BRANCH_LEN>::decode_ssz_checked(
+                slices[2],
+            )?,
             sync_aggregate: SyncAggregate::decode_ssz(slices[3])?,
             signature_slot: u64::decode_ssz(slices[4])?,
         })
@@ -4221,29 +4351,52 @@ impl SszDecode for CapellaBeaconState {
             slot: u64::decode_ssz(slices[2])?,
             fork: Fork::decode_ssz(slices[3])?,
             latest_block_header: BeaconBlockHeader::decode_ssz(slices[4])?,
-            block_roots: SszVector::<[u8; 32], SLOTS_PER_HISTORICAL_ROOT>::decode_ssz_checked(slices[5])?,
-            state_roots: SszVector::<[u8; 32], SLOTS_PER_HISTORICAL_ROOT>::decode_ssz_checked(slices[6])?,
-            historical_roots: SszList::<[u8; 32], HISTORICAL_ROOTS_LIMIT>::decode_ssz_checked(slices[7])?,
+            block_roots: SszVector::<[u8; 32], SLOTS_PER_HISTORICAL_ROOT>::decode_ssz_checked(
+                slices[5],
+            )?,
+            state_roots: SszVector::<[u8; 32], SLOTS_PER_HISTORICAL_ROOT>::decode_ssz_checked(
+                slices[6],
+            )?,
+            historical_roots: SszList::<[u8; 32], HISTORICAL_ROOTS_LIMIT>::decode_ssz_checked(
+                slices[7],
+            )?,
             eth1_data: Eth1Data::decode_ssz(slices[8])?,
-            eth1_data_votes: SszList::<Eth1Data, ETH1_DATA_VOTES_LIMIT>::decode_ssz_checked(slices[9])?,
+            eth1_data_votes: SszList::<Eth1Data, ETH1_DATA_VOTES_LIMIT>::decode_ssz_checked(
+                slices[9],
+            )?,
             eth1_deposit_index: u64::decode_ssz(slices[10])?,
-            validators: SszList::<Validator, VALIDATOR_REGISTRY_LIMIT>::decode_ssz_checked(slices[11])?,
+            validators: SszList::<Validator, VALIDATOR_REGISTRY_LIMIT>::decode_ssz_checked(
+                slices[11],
+            )?,
             balances: SszList::<u64, VALIDATOR_REGISTRY_LIMIT>::decode_ssz_checked(slices[12])?,
-            randao_mixes: SszVector::<[u8; 32], EPOCHS_PER_HISTORICAL_VECTOR>::decode_ssz_checked(slices[13])?,
-            slashings: SszVector::<u64, EPOCHS_PER_SLASHINGS_VECTOR>::decode_ssz_checked(slices[14])?,
-            previous_epoch_participation: SszList::<u8, VALIDATOR_REGISTRY_LIMIT>::decode_ssz_checked(slices[15])?,
-            current_epoch_participation: SszList::<u8, VALIDATOR_REGISTRY_LIMIT>::decode_ssz_checked(slices[16])?,
-            justification_bits: BitVector::<JUSTIFICATION_BITS_LENGTH>::decode_ssz_checked(slices[17])?,
+            randao_mixes: SszVector::<[u8; 32], EPOCHS_PER_HISTORICAL_VECTOR>::decode_ssz_checked(
+                slices[13],
+            )?,
+            slashings: SszVector::<u64, EPOCHS_PER_SLASHINGS_VECTOR>::decode_ssz_checked(
+                slices[14],
+            )?,
+            previous_epoch_participation:
+                SszList::<u8, VALIDATOR_REGISTRY_LIMIT>::decode_ssz_checked(slices[15])?,
+            current_epoch_participation:
+                SszList::<u8, VALIDATOR_REGISTRY_LIMIT>::decode_ssz_checked(slices[16])?,
+            justification_bits: BitVector::<JUSTIFICATION_BITS_LENGTH>::decode_ssz_checked(
+                slices[17],
+            )?,
             previous_justified_checkpoint: Checkpoint::decode_ssz(slices[18])?,
             current_justified_checkpoint: Checkpoint::decode_ssz(slices[19])?,
             finalized_checkpoint: Checkpoint::decode_ssz(slices[20])?,
-            inactivity_scores: SszList::<u64, VALIDATOR_REGISTRY_LIMIT>::decode_ssz_checked(slices[21])?,
+            inactivity_scores: SszList::<u64, VALIDATOR_REGISTRY_LIMIT>::decode_ssz_checked(
+                slices[21],
+            )?,
             current_sync_committee: SyncCommittee::decode_ssz(slices[22])?,
             next_sync_committee: SyncCommittee::decode_ssz(slices[23])?,
             latest_execution_payload_header: CapellaExecutionPayloadHeader::decode_ssz(slices[24])?,
             next_withdrawal_index: u64::decode_ssz(slices[25])?,
             next_withdrawal_validator_index: u64::decode_ssz(slices[26])?,
-            historical_summaries: SszList::<HistoricalSummary, HISTORICAL_ROOTS_LIMIT>::decode_ssz_checked(slices[27])?,
+            historical_summaries:
+                SszList::<HistoricalSummary, HISTORICAL_ROOTS_LIMIT>::decode_ssz_checked(
+                    slices[27],
+                )?,
         })
     }
 }
@@ -4491,8 +4644,13 @@ impl SszDecode for DenebExecutionPayload {
             extra_data: SszList::<u8, MAX_EXTRA_DATA_BYTES>::decode_ssz_checked(slices[10])?,
             base_fee_per_gas: <[u8; 32]>::decode_ssz(slices[11])?,
             block_hash: <[u8; 32]>::decode_ssz(slices[12])?,
-            transactions: SszList::<SszList<u8, MAX_BYTES_PER_TRANSACTION>, MAX_TRANSACTIONS_PER_PAYLOAD>::decode_ssz_checked(slices[13])?,
-            withdrawals: SszList::<Withdrawal, MAX_WITHDRAWALS_PER_PAYLOAD>::decode_ssz_checked(slices[14])?,
+            transactions: SszList::<
+                SszList<u8, MAX_BYTES_PER_TRANSACTION>,
+                MAX_TRANSACTIONS_PER_PAYLOAD,
+            >::decode_ssz_checked(slices[13])?,
+            withdrawals: SszList::<Withdrawal, MAX_WITHDRAWALS_PER_PAYLOAD>::decode_ssz_checked(
+                slices[14],
+            )?,
             blob_gas_used: u64::decode_ssz(slices[15])?,
             excess_blob_gas: u64::decode_ssz(slices[16])?,
         })
@@ -4725,15 +4883,22 @@ impl SszDecode for DenebBeaconBlockBody {
             randao_reveal: <[u8; 96]>::decode_ssz(slices[0])?,
             eth1_data: Eth1Data::decode_ssz(slices[1])?,
             graffiti: <[u8; 32]>::decode_ssz(slices[2])?,
-            proposer_slashings: SszList::<ProposerSlashing, MAX_PROPOSER_SLASHINGS>::decode_ssz_checked(slices[3])?,
-            attester_slashings: SszList::<AttesterSlashing, MAX_ATTESTER_SLASHINGS>::decode_ssz_checked(slices[4])?,
+            proposer_slashings:
+                SszList::<ProposerSlashing, MAX_PROPOSER_SLASHINGS>::decode_ssz_checked(slices[3])?,
+            attester_slashings:
+                SszList::<AttesterSlashing, MAX_ATTESTER_SLASHINGS>::decode_ssz_checked(slices[4])?,
             attestations: SszList::<Attestation, MAX_ATTESTATIONS>::decode_ssz_checked(slices[5])?,
             deposits: SszList::<Deposit, MAX_DEPOSITS>::decode_ssz_checked(slices[6])?,
-            voluntary_exits: SszList::<SignedVoluntaryExit, MAX_VOLUNTARY_EXITS>::decode_ssz_checked(slices[7])?,
+            voluntary_exits:
+                SszList::<SignedVoluntaryExit, MAX_VOLUNTARY_EXITS>::decode_ssz_checked(slices[7])?,
             sync_aggregate: SyncAggregate::decode_ssz(slices[8])?,
             execution_payload: DenebExecutionPayload::decode_ssz(slices[9])?,
-            bls_to_execution_changes: SszList::<SignedBLSToExecutionChange, MAX_BLS_TO_EXECUTION_CHANGES>::decode_ssz_checked(slices[10])?,
-            blob_kzg_commitments: SszList::<[u8; 48], MAX_BLOB_COMMITMENTS_PER_BLOCK>::decode_ssz_checked(slices[11])?,
+            bls_to_execution_changes: SszList::<
+                SignedBLSToExecutionChange,
+                MAX_BLS_TO_EXECUTION_CHANGES,
+            >::decode_ssz_checked(slices[10])?,
+            blob_kzg_commitments:
+                SszList::<[u8; 48], MAX_BLOB_COMMITMENTS_PER_BLOCK>::decode_ssz_checked(slices[11])?,
         })
     }
 }
@@ -4889,7 +5054,9 @@ impl SszDecode for DenebLightClientHeader {
         Ok(Self {
             beacon: BeaconBlockHeader::decode_ssz(slices[0])?,
             execution: DenebExecutionPayloadHeader::decode_ssz(slices[1])?,
-            execution_branch: SszVector::<[u8; 32], EXECUTION_BRANCH_LEN>::decode_ssz_checked(slices[2])?,
+            execution_branch: SszVector::<[u8; 32], EXECUTION_BRANCH_LEN>::decode_ssz_checked(
+                slices[2],
+            )?,
         })
     }
 }
@@ -4938,7 +5105,10 @@ impl SszDecode for DenebLightClientBootstrap {
         Ok(Self {
             header: DenebLightClientHeader::decode_ssz(slices[0])?,
             current_sync_committee: SyncCommittee::decode_ssz(slices[1])?,
-            current_sync_committee_branch: SszVector::<[u8; 32], CURRENT_SYNC_COMMITTEE_BRANCH_LEN>::decode_ssz_checked(slices[2])?,
+            current_sync_committee_branch:
+                SszVector::<[u8; 32], CURRENT_SYNC_COMMITTEE_BRANCH_LEN>::decode_ssz_checked(
+                    slices[2],
+                )?,
         })
     }
 }
@@ -5003,9 +5173,14 @@ impl SszDecode for DenebLightClientUpdate {
         Ok(Self {
             attested_header: DenebLightClientHeader::decode_ssz(slices[0])?,
             next_sync_committee: SyncCommittee::decode_ssz(slices[1])?,
-            next_sync_committee_branch: SszVector::<[u8; 32], NEXT_SYNC_COMMITTEE_BRANCH_LEN>::decode_ssz_checked(slices[2])?,
+            next_sync_committee_branch:
+                SszVector::<[u8; 32], NEXT_SYNC_COMMITTEE_BRANCH_LEN>::decode_ssz_checked(
+                    slices[2],
+                )?,
             finalized_header: DenebLightClientHeader::decode_ssz(slices[3])?,
-            finality_branch: SszVector::<[u8; 32], FINALITY_BRANCH_LEN>::decode_ssz_checked(slices[4])?,
+            finality_branch: SszVector::<[u8; 32], FINALITY_BRANCH_LEN>::decode_ssz_checked(
+                slices[4],
+            )?,
             sync_aggregate: SyncAggregate::decode_ssz(slices[5])?,
             signature_slot: u64::decode_ssz(slices[6])?,
         })
@@ -5067,7 +5242,9 @@ impl SszDecode for DenebLightClientFinalityUpdate {
         Ok(Self {
             attested_header: DenebLightClientHeader::decode_ssz(slices[0])?,
             finalized_header: DenebLightClientHeader::decode_ssz(slices[1])?,
-            finality_branch: SszVector::<[u8; 32], FINALITY_BRANCH_LEN>::decode_ssz_checked(slices[2])?,
+            finality_branch: SszVector::<[u8; 32], FINALITY_BRANCH_LEN>::decode_ssz_checked(
+                slices[2],
+            )?,
             sync_aggregate: SyncAggregate::decode_ssz(slices[3])?,
             signature_slot: u64::decode_ssz(slices[4])?,
         })
@@ -5271,29 +5448,52 @@ impl SszDecode for DenebBeaconState {
             slot: u64::decode_ssz(slices[2])?,
             fork: Fork::decode_ssz(slices[3])?,
             latest_block_header: BeaconBlockHeader::decode_ssz(slices[4])?,
-            block_roots: SszVector::<[u8; 32], SLOTS_PER_HISTORICAL_ROOT>::decode_ssz_checked(slices[5])?,
-            state_roots: SszVector::<[u8; 32], SLOTS_PER_HISTORICAL_ROOT>::decode_ssz_checked(slices[6])?,
-            historical_roots: SszList::<[u8; 32], HISTORICAL_ROOTS_LIMIT>::decode_ssz_checked(slices[7])?,
+            block_roots: SszVector::<[u8; 32], SLOTS_PER_HISTORICAL_ROOT>::decode_ssz_checked(
+                slices[5],
+            )?,
+            state_roots: SszVector::<[u8; 32], SLOTS_PER_HISTORICAL_ROOT>::decode_ssz_checked(
+                slices[6],
+            )?,
+            historical_roots: SszList::<[u8; 32], HISTORICAL_ROOTS_LIMIT>::decode_ssz_checked(
+                slices[7],
+            )?,
             eth1_data: Eth1Data::decode_ssz(slices[8])?,
-            eth1_data_votes: SszList::<Eth1Data, ETH1_DATA_VOTES_LIMIT>::decode_ssz_checked(slices[9])?,
+            eth1_data_votes: SszList::<Eth1Data, ETH1_DATA_VOTES_LIMIT>::decode_ssz_checked(
+                slices[9],
+            )?,
             eth1_deposit_index: u64::decode_ssz(slices[10])?,
-            validators: SszList::<Validator, VALIDATOR_REGISTRY_LIMIT>::decode_ssz_checked(slices[11])?,
+            validators: SszList::<Validator, VALIDATOR_REGISTRY_LIMIT>::decode_ssz_checked(
+                slices[11],
+            )?,
             balances: SszList::<u64, VALIDATOR_REGISTRY_LIMIT>::decode_ssz_checked(slices[12])?,
-            randao_mixes: SszVector::<[u8; 32], EPOCHS_PER_HISTORICAL_VECTOR>::decode_ssz_checked(slices[13])?,
-            slashings: SszVector::<u64, EPOCHS_PER_SLASHINGS_VECTOR>::decode_ssz_checked(slices[14])?,
-            previous_epoch_participation: SszList::<u8, VALIDATOR_REGISTRY_LIMIT>::decode_ssz_checked(slices[15])?,
-            current_epoch_participation: SszList::<u8, VALIDATOR_REGISTRY_LIMIT>::decode_ssz_checked(slices[16])?,
-            justification_bits: BitVector::<JUSTIFICATION_BITS_LENGTH>::decode_ssz_checked(slices[17])?,
+            randao_mixes: SszVector::<[u8; 32], EPOCHS_PER_HISTORICAL_VECTOR>::decode_ssz_checked(
+                slices[13],
+            )?,
+            slashings: SszVector::<u64, EPOCHS_PER_SLASHINGS_VECTOR>::decode_ssz_checked(
+                slices[14],
+            )?,
+            previous_epoch_participation:
+                SszList::<u8, VALIDATOR_REGISTRY_LIMIT>::decode_ssz_checked(slices[15])?,
+            current_epoch_participation:
+                SszList::<u8, VALIDATOR_REGISTRY_LIMIT>::decode_ssz_checked(slices[16])?,
+            justification_bits: BitVector::<JUSTIFICATION_BITS_LENGTH>::decode_ssz_checked(
+                slices[17],
+            )?,
             previous_justified_checkpoint: Checkpoint::decode_ssz(slices[18])?,
             current_justified_checkpoint: Checkpoint::decode_ssz(slices[19])?,
             finalized_checkpoint: Checkpoint::decode_ssz(slices[20])?,
-            inactivity_scores: SszList::<u64, VALIDATOR_REGISTRY_LIMIT>::decode_ssz_checked(slices[21])?,
+            inactivity_scores: SszList::<u64, VALIDATOR_REGISTRY_LIMIT>::decode_ssz_checked(
+                slices[21],
+            )?,
             current_sync_committee: SyncCommittee::decode_ssz(slices[22])?,
             next_sync_committee: SyncCommittee::decode_ssz(slices[23])?,
             latest_execution_payload_header: DenebExecutionPayloadHeader::decode_ssz(slices[24])?,
             next_withdrawal_index: u64::decode_ssz(slices[25])?,
             next_withdrawal_validator_index: u64::decode_ssz(slices[26])?,
-            historical_summaries: SszList::<HistoricalSummary, HISTORICAL_ROOTS_LIMIT>::decode_ssz_checked(slices[27])?,
+            historical_summaries:
+                SszList::<HistoricalSummary, HISTORICAL_ROOTS_LIMIT>::decode_ssz_checked(
+                    slices[27],
+                )?,
         })
     }
 }
@@ -5515,10 +5715,7 @@ fn mainnet_shared_attester_slashing() {
 
 #[test]
 fn mainnet_shared_aggregate_and_proof() {
-    run_mainnet_type_for_forks::<AggregateAndProof>(
-        "AggregateAndProof",
-        LEGACY_ATTESTATION_FORKS,
-    );
+    run_mainnet_type_for_forks::<AggregateAndProof>("AggregateAndProof", LEGACY_ATTESTATION_FORKS);
 }
 
 #[test]
@@ -5672,10 +5869,7 @@ fn mainnet_capella_light_client_header() {
 
 #[test]
 fn mainnet_capella_light_client_bootstrap() {
-    run_mainnet_type_for_forks::<CapellaLightClientBootstrap>(
-        "LightClientBootstrap",
-        &["capella"],
-    );
+    run_mainnet_type_for_forks::<CapellaLightClientBootstrap>("LightClientBootstrap", &["capella"]);
 }
 
 #[test]
@@ -5721,10 +5915,7 @@ fn mainnet_deneb_execution_payload() {
 
 #[test]
 fn mainnet_deneb_execution_payload_header() {
-    run_mainnet_type_for_forks::<DenebExecutionPayloadHeader>(
-        "ExecutionPayloadHeader",
-        &["deneb"],
-    );
+    run_mainnet_type_for_forks::<DenebExecutionPayloadHeader>("ExecutionPayloadHeader", &["deneb"]);
 }
 
 #[test]
@@ -5803,10 +5994,7 @@ fn mainnet_altair_plus_sync_committee_contribution() {
 
 #[test]
 fn mainnet_altair_plus_contribution_and_proof() {
-    run_mainnet_type_for_forks::<ContributionAndProof>(
-        "ContributionAndProof",
-        ALTAIR_PLUS_FORKS,
-    );
+    run_mainnet_type_for_forks::<ContributionAndProof>("ContributionAndProof", ALTAIR_PLUS_FORKS);
 }
 
 #[test]
